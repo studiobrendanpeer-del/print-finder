@@ -103,7 +103,7 @@ td:first-child{color:var(--muted);width:42%}
     <button class="btn" type="submit" id="go">Search</button>
   </div>
   <div class="srcs" id="srcs"></div>
-  <details class="note"><summary>Settings</summary><div class="row" style="margin-top:8px"><label>Europeana key — only needed if Europeana starts failing (free from pro.europeana.eu)<input id="eukey" type="text" value="api2demo" style="width:220px"></label></div></details>
+  <details class="note"><summary>Settings</summary><div class="row" style="margin-top:8px"><label>Europeana key — only needed if Europeana starts failing (free from pro.europeana.eu)<input id="eukey" type="text" value="api2demo" style="width:220px"></label><button class="btn ghost" type="button" id="selftest">Test all sources</button></div></details>
   <div class="need" id="need"></div>
 </form>
 <div id="status"></div>
@@ -573,6 +573,28 @@ $("shortlist").onclick=()=>{
   if(!$("sdlg").open)$("sdlg").showModal();
 };
 $("sclose").onclick=()=>$("sdlg").close();
+
+/* ---------- self-test: one small live search per source, run from the viewer's browser ---------- */
+const imgOK=url=>new Promise(res=>{if(!url)return res(false);const i=new Image();i.referrerPolicy="no-referrer";
+  const t=setTimeout(()=>res(false),15000);i.onload=()=>{clearTimeout(t);res(true)};i.onerror=()=>{clearTimeout(t);res(false)};i.src=url;});
+$("selftest").onclick=async()=>{
+  const o={q:"flower",medium:"",from:null,to:null,paper:"A3",dpi:150,mode:"contain",needS:1754,needL:2480,psIn:297/25.4,plIn:420/25.4};
+  $("sbody").innerHTML=`<h2>Source test</h2><p class="note">One small search for “flower” per source, run from this browser. “Blocked” usually means the museum doesn't allow websites to call its API (CORS).</p><table id="tt">${SOURCES.map(s=>`<tr><td>${esc(s.name)}</td><td id="tt-${s.key}">Testing…</td></tr>`).join("")}</table>`;
+  if(!$("sdlg").open)$("sdlg").showModal();
+  await Promise.all(SOURCES.map(async s=>{
+    const cell=()=>$("tt-"+s.key);const t0=performance.now();
+    try{
+      const r=await adapters[s.key](o,0,false,{});
+      const secs=((performance.now()-t0)/1000).toFixed(1);
+      const it=r.items[0];
+      if(!it){cell().innerHTML=`<span class="b warn">Reached, but 0 results</span> <span class="note">${secs}s</span>`;return;}
+      const thumb=await imgOK(it.thumb);
+      let iiif="";
+      if(it.iiif){try{await getJSON(it.iiif+"/info.json",15000);iiif=' <span class="b ok">size check OK</span>'}catch(e){iiif=` <span class="b warn">size check: ${esc(e.message)}</span>`}}
+      cell().innerHTML=`<span class="b ok">Works</span> ${r.items.length} results · <span class="note">${secs}s</span>${thumb?"":' <span class="b warn">thumbnail failed</span>'}${iiif}<br><span class="note">e.g. ${esc(it.title)} — ${it.w}×${it.h}</span>`;
+    }catch(e){cell().innerHTML=`<span class="b bad">Failed</span> ${esc(e.message)}`;}
+  }));
+};
 </script>
 </body>
 </html>
