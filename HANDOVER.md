@@ -15,6 +15,7 @@ A static site (GitHub Pages) that searches open-access museum collections and sh
 | met | The Met | collectionapi.metmuseum.org **v1.1** search (v1 search retired 2026-10-01). `isPublicDomain` param is ignored, so checked per object. No sizes in the API: `jpegSize()` reads the JPEG header with a Range request (64 KB). Most originals are ~4,000 px, so few pass at A2/200. |
 | getty | Getty Museum | SPARQL at data.getty.edu (label keyword match, medium by AAT type) → one fetch per image record (`data.getty.edu/media/image/…`) for CC0 rights, pixel size and media.getty.edu IIIF. Object-level CC0 is metadata only — image rights live on the image record. |
 | si | Smithsonian | api.si.edu Open Access, `media_usage:CC0`; pixel size is in the search result. Key in Settings: DEMO_KEY ≈10 req/hour per IP; free personal key at api.data.gov/signup. |
+| ycba | Yale Center for British Art | LUX search (lux.collections.yale.edu, `memberOf` its two art collections + `hasDigitalImage`) → LUX record (date, artist, YCBA object number from thumbnail URL) → IIIF manifest at manifests.collections.yale.edu (CC0 `rights`, canvas pixel size, images.collections.yale.edu IIIF). Yale's CDN blocks non-browser user agents (curl gets 403); browsers are fine. |
 | aic | Art Institute of Chicago | api.artic.edu `params` JSON query; download may be capped below master size ("Check downloadable size" button reads info.json). |
 | smk | SMK Denmark | api.smk.dk, `image_width/height`. |
 | eu | Europeana | Needs wskey (default public `api2demo`, rate-limited; user key goes in Settings). Search pre-filters IMAGE_SIZE:extra_large + `RIGHTS:*publicdomain*` (not `reusability=open`, which admits CC BY and emptied whole pages); per-record call for ebucoreWidth/Height. |
@@ -29,7 +30,7 @@ A static site (GitHub Pages) that searches open-access museum collections and sh
 ## Known gaps / ideas
 - **Settings → Test all sources** runs one small live search per source from the viewer's browser and reports Works / Failed / thumbnail / size-check status. Use it first when anything breaks.
 - All 10 sources verified working from headless Chromium on 2026-10-07. Not verifiable from the cloud sandbox: AIC images (Cloudflare bot check on datacenter IPs), Wikimedia (intermittent 429 on shared IPs), Smithsonian thumbnails (ids.si.edu not allowlisted).
-- Not yet added: Yale Center for British Art (lives on lux.collections.yale.edu; needs that host allowlisted to build/test).
+- Sandbox allowlist needs `*.collections.yale.edu` for Yale testing.
 
 ## Owner preferences
 Brendan is a designer, not a developer. Keep replies short and plain; lead with problems first. Commit straight to `main` (GitHub Pages deploys from `main` / root).
