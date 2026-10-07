@@ -172,7 +172,8 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v)
 let shortlist=store.get("pf_shortlist",[]);
 
 /* ---------- UI setup ---------- */
-SOURCES.forEach(s=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" value="${s.key}" checked> ${esc(s.name)}${s.cc0?"":" <span class='b warn'>licence varies</span>"}`;$("srcs").appendChild(l)});
+const offSrcs=new Set(store.get("pf_off",[])); // sources the viewer unticked, remembered in this browser
+SOURCES.forEach(s=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" value="${s.key}" ${offSrcs.has(s.key)?"":"checked"}> ${esc(s.name)}${s.cc0?"":" <span class='b warn'>licence varies</span>"}`;$("srcs").appendChild(l)});
 const saved=store.get("pf_form",null);
 if(saved)for(const[k,v]of Object.entries(saved)){if($(k))$(k).value=v}
 
@@ -696,6 +697,7 @@ function run(){
   rerender();
   o.srcs.forEach(k=>sourceLoop(k,runId,o));
 }
+$("srcs").addEventListener("change",()=>store.set("pf_off",[...$("srcs").querySelectorAll("input:not(:checked)")].map(i=>i.value)));
 $("f").addEventListener("submit",e=>{e.preventDefault();run()});
 $("more").onclick=()=>{view.limit+=PAGE;rerender();topUp();};
 $("sort").onchange=()=>{view.sort=$("sort").value;rerender()};
