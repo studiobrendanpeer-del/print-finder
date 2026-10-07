@@ -1,6 +1,6 @@
 # Print Finder — handover
 
-A static site (GitHub Pages) that searches open-access museum collections and only shows public-domain images with enough pixels to print at a chosen paper size/DPI (default A2 @ 200 dpi).
+A static site (GitHub Pages) that searches open-access museum collections and shows every public-domain image that prints at A4 or larger at the chosen DPI (default 200). Each card shows the largest A size (A4 … A0, 2A0, 4A0) the image can print, directly under the thumbnail.
 
 ## Files
 - `index.html` — the whole app (HTML/CSS/JS, no build step). Calls museum APIs directly from the browser.
@@ -23,7 +23,7 @@ A static site (GitHub Pages) that searches open-access museum collections and on
 ## UI behaviour
 - Results show 12 at a time ("Load 12 more"); each source pages independently and stops once enough results are buffered.
 - Post-search filters: clickable source chips (multi-select), sort (print quality / pixels / earliest / latest / title), shape (portrait / landscape / square).
-- Print maths in `fit()`: "contain" (whole image with margins) dpi = max(long/paperLong, short/paperShort); "cover" (fill sheet) = min(...).
+- Print maths in `fit()`: for every A size in `PAPER`, "contain" (whole image with margins) dpi = max(long/paperLong, short/paperShort); "cover" (fill sheet) = min(...). `maxA` = largest size still ≥ chosen dpi; anything below A4 is dropped. There's no paper selector any more. Post-search "A3+ / A2+ / A1+ / A0+" chips filter by `maxA`, and "Largest print size" sort uses it too.
 - Shortlist stored in localStorage, CSV export.
 
 ## Known gaps / ideas

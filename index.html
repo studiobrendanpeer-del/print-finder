@@ -50,7 +50,9 @@ button.st:hover{border-color:var(--muted)}
 .card:hover{border-color:var(--muted)}
 .thumb{aspect-ratio:1/1;background:var(--chip);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .thumb img{max-width:100%;max-height:100%;object-fit:contain}
-.meta{padding:10px 12px 12px;display:grid;gap:6px;font-size:13px}
+.maxa{padding:8px 12px 0;font:600 17px/1.2 Georgia,"Times New Roman",serif;display:flex;align-items:baseline;gap:8px}
+.maxa span{font:12px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--muted)}
+.meta{padding:6px 12px 12px;display:grid;gap:6px;font-size:13px}
 .t{font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .a{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badges{display:flex;flex-wrap:wrap;gap:4px}
@@ -83,7 +85,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 10 open-access collections and keeps only public domain images with enough pixels for your print size.</p>
+  <p class="sub">Searches 10 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -96,7 +98,6 @@ td:first-child{color:var(--muted);width:42%}
     <label>To year<input id="to" type="number" placeholder="1900"></label>
   </div>
   <div class="row">
-    <label>Paper<select id="paper"><option>A3</option><option selected>A2</option><option>A1</option><option>A0</option></select></label>
     <label>Min DPI<select id="dpi"><option value="300">300 (gallery)</option><option value="240">240</option><option value="200" selected>200 (normal viewing)</option><option value="150">150 (bare minimum)</option></select></label>
     <label>Layout<select id="mode"><option value="contain">Whole image, with margins</option><option value="cover">Fill the sheet (crop)</option></select></label>
     <label>Licence<select id="lic"><option value="strict">CC0 museums only</option><option value="all" selected>Include Wikimedia (check licence)</option></select></label>
@@ -108,8 +109,9 @@ td:first-child{color:var(--muted);width:42%}
 </form>
 <div id="status"></div>
 <div class="row" id="tools" hidden style="margin:0 0 14px">
-  <label>Sort<select id="sort"><option value="res">Highest print quality</option><option value="mp">Most pixels</option><option value="early">Earliest first</option><option value="late">Latest first</option><option value="title">Title A–Z</option></select></label>
+  <label>Sort<select id="sort"><option value="res">Largest print size</option><option value="mp">Most pixels</option><option value="early">Earliest first</option><option value="late">Latest first</option><option value="title">Title A–Z</option></select></label>
   <div class="chips" id="orients"><button type="button" class="chip on" data-o="">Any shape</button><button type="button" class="chip" data-o="portrait">Portrait</button><button type="button" class="chip" data-o="landscape">Landscape</button><button type="button" class="chip" data-o="square">Square-ish</button></div>
+  <div class="chips" id="mins"><button type="button" class="chip on" data-m="">Any size (A4+)</button><button type="button" class="chip" data-m="A3">A3+</button><button type="button" class="chip" data-m="A2">A2+</button><button type="button" class="chip" data-m="A1">A1+</button><button type="button" class="chip" data-m="A0">A0+</button></div>
 </div>
 <div class="grid" id="grid"></div>
 <div class="empty" id="empty" hidden></div>
@@ -123,7 +125,8 @@ td:first-child{color:var(--muted);width:42%}
 <script>
 "use strict";
 /* ---------- constants ---------- */
-const PAPER={A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189]}; // mm short,long
+const PAPER={A4:[210,297],A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189],"2A0":[1189,1682],"4A0":[1682,2378]}; // mm short,long
+const SIZES=Object.keys(PAPER); // smallest first; results must reach at least A4
 const MED={
   painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
   drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
@@ -168,31 +171,31 @@ const saved=store.get("pf_form",null);
 if(saved)for(const[k,v]of Object.entries(saved)){if($(k))$(k).value=v}
 
 function opts(){
-  const [ps,pl]=PAPER[$("paper").value], dpi=+$("dpi").value;
+  const [ps,pl]=PAPER.A4, dpi=+$("dpi").value;
   const lic=$("lic").value;
   const srcs=[...$("srcs").querySelectorAll("input:checked")].map(i=>i.value).filter(k=>lic==="all"||k!=="wm");
   return {q:$("q").value.trim(),medium:$("medium").value,from:$("from").value?+$("from").value:null,to:$("to").value?+$("to").value:null,
-    paper:$("paper").value,dpi,mode:$("mode").value,srcs,
+    dpi,mode:$("mode").value,srcs,
     needS:Math.round(ps/25.4*dpi),needL:Math.round(pl/25.4*dpi),psIn:ps/25.4,plIn:pl/25.4};
 }
 function showNeed(){const o=opts();$("need").innerHTML=o.mode==="contain"
-  ?`${o.paper} at ${o.dpi} dpi: the image needs <b>${o.needL.toLocaleString()} px on its long side</b> or <b>${o.needS.toLocaleString()} px on its short side</b>`
-  :`${o.paper} at ${o.dpi} dpi: the image needs at least <b>${o.needS.toLocaleString()} × ${o.needL.toLocaleString()} px</b> to fill the sheet`;}
-["paper","dpi","mode"].forEach(id=>$(id).addEventListener("change",()=>{showNeed();if(results.length){view.limit=PAGE;rerender();topUp()}}));
+  ?`Shows everything that prints at <b>A4 or larger</b> at ${o.dpi} dpi (at least ${o.needL.toLocaleString()} px on the long side or ${o.needS.toLocaleString()} px on the short side). Each result shows the largest A size it can print.`
+  :`Shows everything that fills <b>an A4 sheet or larger</b> at ${o.dpi} dpi (at least ${o.needS.toLocaleString()} × ${o.needL.toLocaleString()} px). Each result shows the largest A size it can fill.`;}
+["dpi","mode"].forEach(id=>$(id).addEventListener("change",()=>{showNeed();if(results.length){view.limit=PAGE;rerender();topUp()}}));
 showNeed();
 
 /* ---------- print maths ---------- */
 function fit(it,o){
   const L=Math.max(it.w,it.h), S=Math.min(it.w,it.h);
-  // whole image printed as large as fits on the sheet → dpi set by the tighter side
-  const effContain=Math.max(L/o.plIn,S/o.psIn);
-  // image scaled to cover the whole sheet (cropping the excess)
-  const effCover=Math.min(L/o.plIn,S/o.psIn);
-  const eff=o.mode==="cover"?effCover:effContain;
-  const ar=L/S, par=o.plIn/o.psIn;
+  const effAt=k=>{const pl=PAPER[k][1]/25.4,ps=PAPER[k][0]/25.4;
+    // "contain": whole image as large as fits on the sheet → dpi set by the tighter side; "cover": fills the sheet, cropping the excess
+    return Math.round(o.mode==="cover"?Math.min(L/pl,S/ps):Math.max(L/pl,S/ps));};
+  const dpis=SIZES.map(k=>({k,dpi:effAt(k)}));
+  const best=dpis.filter(x=>x.dpi>=o.dpi).pop(); // largest A size that still meets the dpi
+  const ar=L/S, par=Math.SQRT2; // every A size has the same √2 shape
   const crop=Math.round((1-Math.min(ar,par)/Math.max(ar,par))*100); // % lost when filling the sheet
   const maxL=L/o.dpi*2.54, maxS=S/o.dpi*2.54; // cm at chosen dpi
-  return {eff:Math.round(eff),pass:eff>=o.dpi,crop,maxL,maxS};
+  return {pass:!!best,maxA:best?.k||null,rank:best?SIZES.indexOf(best.k):-1,eff:best?.dpi||dpis[0].dpi,dpis,crop,maxL,maxS};
 }
 function orientOf(it){const r=it.w/it.h;return r>1.08?"landscape":r<0.92?"portrait":"square";}
 
@@ -484,7 +487,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
 /* ---------- search engine ---------- */
 const PAGE=12;
 let results=[],seen=new Set(),state={},runId=0;
-let view={src:new Set(),orient:"",sort:"res",limit:PAGE};
+let view={src:new Set(),orient:"",min:"",sort:"res",limit:PAGE};
 function keep(it,o){
   if(!(it.w>0&&it.h>0))return false;
   if(!fit(it,o).pass)return false;
@@ -501,8 +504,9 @@ function visible(o){
   let l=printable(o);
   if(view.src.size)l=l.filter(it=>view.src.has(it.src));
   if(view.orient)l=l.filter(it=>orientOf(it)===view.orient);
+  if(view.min)l=l.filter(it=>fit(it,o).rank>=SIZES.indexOf(view.min));
   const yr=(it,dir)=>it.year??(dir>0?1e9:-1e9);
-  const by={res:(a,b)=>fit(b,o).eff-fit(a,o).eff,
+  const by={res:(a,b)=>fit(b,o).rank-fit(a,o).rank||b.w*b.h-a.w*a.h,
     early:(a,b)=>yr(a,1)-yr(b,1),late:(a,b)=>yr(b,-1)-yr(a,-1),
     title:(a,b)=>String(a.title).localeCompare(String(b.title)),
     mp:(a,b)=>b.w*b.h-a.w*a.h}[view.sort];
@@ -545,7 +549,7 @@ function topUp(){
 }
 let rq=0;function scheduleRender(){if(!rq)rq=requestAnimationFrame(()=>{rq=0;rerender()})}
 function run(){
-  const o=opts();store.set("pf_form",{q:o.q,medium:o.medium,from:$("from").value,to:$("to").value,paper:o.paper,dpi:String(o.dpi),mode:o.mode,lic:$("lic").value,eukey:$("eukey").value,sikey:$("sikey").value});
+  const o=opts();store.set("pf_form",{q:o.q,medium:o.medium,from:$("from").value,to:$("to").value,dpi:String(o.dpi),mode:o.mode,lic:$("lic").value,eukey:$("eukey").value,sikey:$("sikey").value});
   showNeed();runId++;results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;
   o.srcs.forEach(k=>state[k]={page:0,more:true,rounds:0});
   $("grid").innerHTML="";$("more").hidden=true;$("tools").hidden=false;
@@ -556,14 +560,15 @@ function run(){
 $("f").addEventListener("submit",e=>{e.preventDefault();run()});
 $("more").onclick=()=>{view.limit+=PAGE;rerender();topUp();};
 $("sort").onchange=()=>{view.sort=$("sort").value;rerender()};
+$("mins").querySelectorAll("button").forEach(b=>b.onclick=()=>{view.min=b.dataset.m;view.limit=PAGE;
+  $("mins").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));rerender();topUp();});
 $("orients").querySelectorAll("button").forEach(b=>b.onclick=()=>{view.orient=b.dataset.o;view.limit=PAGE;
   $("orients").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));rerender();topUp();});
 
 /* ---------- rendering ---------- */
 function badgeHTML(it,o){
   const f=fit(it,o);const src=SOURCES.find(s=>s.key===it.src);
-  return `<span class="b ${f.pass?"ok":"bad"}">${f.eff} dpi at ${o.paper}</span>`+
-    `<span class="b">${it.w.toLocaleString()}×${it.h.toLocaleString()}</span>`+
+  return `<span class="b">${it.w.toLocaleString()}×${it.h.toLocaleString()}</span>`+
     (o.mode==="cover"&&f.crop>3?`<span class="b warn">${f.crop}% crop</span>`:"")+
     (o.mode==="contain"&&f.crop>25?`<span class="b warn">fills ${100-f.crop}% of sheet</span>`:"")+
     `<span class="b ${src.cc0?"ok":"warn"}">${src.cc0?"CC0":esc(it.licence)}</span>`;
@@ -572,7 +577,9 @@ function card(it,o){
   const on=shortlist.some(s=>s.id===it.id);
   const src=SOURCES.find(s=>s.key===it.src);
   const d=document.createElement("div");d.className="card";d.dataset.id=it.id;
+  const f=fit(it,o);
   d.innerHTML=`<div class="thumb"><img loading="lazy" alt="" src="${esc(it.thumb||"")}" referrerpolicy="no-referrer"></div>
+  <div class="maxa" title="Largest A size at ${o.dpi} dpi (${f.eff} dpi at that size)">Max ${esc(f.maxA)}<span>${f.maxS.toFixed(0)} × ${f.maxL.toFixed(0)} cm</span></div>
   <div class="meta"><div class="t"><button class="star ${on?"on":""}" title="Shortlist">${on?"★":"☆"}</button>${esc(it.title)}</div>
   <div class="a">${esc(it.artist||"Unknown")}${it.date?" · "+esc(it.date):""}</div>
   <div class="a">${esc(it.provider||src.name.replace(/ \(300\+.*\)/,""))}</div>
@@ -593,7 +600,7 @@ function rerender(){
   $("more").textContent=list.length>view.limit?`Load ${Math.min(PAGE,list.length-view.limit)} more`:busy?"Searching…":"Search deeper";
   $("more").disabled=list.length<=view.limit&&busy;
   $("empty").hidden=shown.length>0;
-  if(!shown.length)$("empty").textContent=busy||!results.length&&canFetch?"Searching…":"Nothing printable here. Try a lower DPI, a smaller paper size, broader keywords or another source.";
+  if(!shown.length)$("empty").textContent=busy||!results.length&&canFetch?"Searching…":"Nothing printable here. Try a lower DPI, a smaller minimum size, broader keywords or another source.";
   statusLine();
 }
 
@@ -608,8 +615,9 @@ function openDetail(it){
    <tr><td>Source</td><td>${esc(src.name)}${it.provider?" — "+esc(it.provider):""}</td></tr>
    <tr><td>Licence</td><td>${esc(it.licence)}${src.cc0?"":" — <b>check the file page before selling</b>"}</td></tr>
    <tr><td>Pixels</td><td>${it.w.toLocaleString()} × ${it.h.toLocaleString()} (${(it.w*it.h/1e6).toFixed(1)} MP)</td></tr>
-   <tr><td>At ${o.paper}</td><td>${f.eff} dpi (${o.mode==="cover"?"filling sheet":"whole image"})</td></tr>
-   <tr><td>Crop to fill ${o.paper}</td><td>${f.crop}%</td></tr>
+   <tr><td>Largest A size</td><td><b>${esc(f.maxA)}</b> at ${o.dpi} dpi (${o.mode==="cover"?"filling the sheet":"whole image"})</td></tr>
+   <tr><td>DPI at each size</td><td>${f.dpis.filter(x=>SIZES.indexOf(x.k)<=f.rank+1).map(x=>`${x.k} <span class="b ${x.dpi>=o.dpi?"ok":"bad"}">${x.dpi}</span>`).join(" ")}</td></tr>
+   <tr><td>Crop to fill an A sheet</td><td>${f.crop}%</td></tr>
    <tr><td>Max size at ${o.dpi} dpi</td><td>${f.maxL.toFixed(0)} × ${f.maxS.toFixed(0)} cm</td></tr>
    <tr><td>Downloadable</td><td id="dl">${it.iiif?'<button class="btn ghost" id="chk" type="button">Check downloadable size</button>':"Full file from source"}</td></tr>
   </table>
@@ -629,7 +637,7 @@ function openDetail(it){
       if(mh&&h>mh){w=Math.round(w*mh/h);h=mh}
       if(ma&&w*h>ma){const s=Math.sqrt(ma/(w*h));w=Math.floor(w*s);h=Math.floor(h*s)}
       const g=fit({w,h},o);
-      $("dl").innerHTML=`${w.toLocaleString()} × ${h.toLocaleString()} → <span class="b ${g.pass?"ok":"bad"}">${g.eff} dpi at ${o.paper}</span>`;
+      $("dl").innerHTML=`${w.toLocaleString()} × ${h.toLocaleString()} → <span class="b ${g.pass?"ok":"bad"}">${g.pass?"max "+g.maxA:"below A4"} at ${o.dpi} dpi</span>`;
     }catch(e){$("dl").textContent="Couldn't check ("+e.message+")";}
   };
   $("pix").onclick=()=>{
@@ -674,7 +682,7 @@ $("sclose").onclick=()=>$("sdlg").close();
 const imgOK=url=>new Promise(res=>{if(!url)return res(false);const i=new Image();i.referrerPolicy="no-referrer";
   const t=setTimeout(()=>res(false),15000);i.onload=()=>{clearTimeout(t);res(true)};i.onerror=()=>{clearTimeout(t);res(false)};i.src=url;});
 $("selftest").onclick=async()=>{
-  const o={q:"flower",medium:"",from:null,to:null,paper:"A3",dpi:150,mode:"contain",needS:1754,needL:2480,psIn:297/25.4,plIn:420/25.4};
+  const o={q:"flower",medium:"",from:null,to:null,dpi:150,mode:"contain",needS:1240,needL:1754};
   $("sbody").innerHTML=`<h2>Source test</h2><p class="note">One small search for “flower” per source, run from this browser. “Blocked” usually means the museum doesn't allow websites to call its API (CORS).</p><table id="tt">${SOURCES.map(s=>`<tr><td>${esc(s.name)}</td><td id="tt-${s.key}">Testing…</td></tr>`).join("")}</table>`;
   if(!$("sdlg").open)$("sdlg").showModal();
   await Promise.all(SOURCES.map(async s=>{
