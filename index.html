@@ -85,7 +85,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 11 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
+  <p class="sub">Searches 12 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -142,6 +142,7 @@ const SOURCES=[
   {key:"getty",name:"Getty Museum (Los Angeles)",cc0:true},
   {key:"si",name:"Smithsonian (19 museums)",cc0:true},
   {key:"ycba",name:"Yale Center for British Art",cc0:true},
+  {key:"yuag",name:"Yale University Art Gallery",cc0:true},
   {key:"smk",name:"SMK (Denmark)",cc0:true},
   {key:"eu",name:"Europeana (300+ European museums)",cc0:true},
   {key:"wm",name:"Wikimedia Commons",cc0:false}
@@ -237,6 +238,42 @@ let ngaLoading=null;
 function loadNGA(){
   if(window.NGA_INDEX)return Promise.resolve();
   return ngaLoading||(ngaLoading=fetch("nga-index.json").then(r=>{if(!r.ok)throw new Error("nga-index.json missing");return r.json()}).then(d=>{window.NGA_INDEX=d}).catch(e=>{ngaLoading=null;throw e}));
+}
+
+/* Yale museums share LUX search + IIIF manifests; collection names are LUX set names, picked by medium */
+const YALE={
+  ycba:{suffix:", Yale Center for British Art",sets:{painting:["Paintings and Sculpture Collection"],drawing:["Prints and Drawings Collection"],print:["Prints and Drawings Collection"],photograph:["Prints and Drawings Collection"],
+    "":["Paintings and Sculpture Collection","Prints and Drawings Collection"]}},
+  yuag:{suffix:", Yale University Art Gallery",sets:{painting:["European Art Collection","American Paintings and Sculpture Collection","Asian Art Collection","Modern and Contemporary Art Collection"],
+    drawing:["Prints and Drawings Collection","Asian Art Collection"],print:["Prints and Drawings Collection","Asian Art Collection"],photograph:["Photography Collection"],
+    "":["European Art Collection","American Paintings and Sculpture Collection","Prints and Drawings Collection","Photography Collection","Asian Art Collection","Modern and Contemporary Art Collection",
+      "African Art Collection","Indo-Pacific Art Collection","Art of the Ancient Americas Collection","Indigenous Arts of the Americas Collection"]}}
+};
+async function yale(key,o,page){
+  const cfg=YALE[key];
+  const q={AND:[{hasDigitalImage:1},{OR:cfg.sets[o.medium||""].map(n=>({memberOf:{name:n+cfg.suffix}}))}]};
+  if(o.q)q.AND.unshift({text:o.q});
+  const d=await getJSON("https://lux.collections.yale.edu/api/search/item?"+new URLSearchParams({q:JSON.stringify(q),page:String(page+1),pageLength:"24"}));
+  const ids=arr(d.orderedItems).map(x=>x.id).filter(Boolean);
+  const re=new RegExp("/"+key+"/obj/(\\d+)");
+  const items=(await pool(ids,6,async id=>{
+    const ob=await getJSON(id);
+    const thumbs=arr(ob.representation).flatMap(r=>arr(r.digitally_shown_by)).flatMap(x=>arr(x.access_point)).map(a=>a.id||"");
+    const objNo=(thumbs.map(t=>t.match(re)).find(Boolean)||[])[1];if(!objNo)return null;
+    const man=await getJSON(`https://manifests.collections.yale.edu/${key}/obj/${objNo}`);
+    if(!/publicdomain/.test(man.rights||""))return null;
+    const cv=arr(man.items)[0];if(!cv)return null;
+    const body=arr(cv.items)[0]?.items?.[0]?.body||{};
+    const iiif=arr(body.service).map(x=>x["@id"]||x.id).find(Boolean);if(!iiif)return null;
+    const meta=(...ks)=>{for(const k of ks){const v=(arr(man.metadata).find(m=>arr(m.label?.en)[0]===k)?.value?.en||[])[0];if(v)return v}return ""};
+    const pr=ob.produced_by||{},ts=pr.timespan||{};
+    return {id:key+"-"+objNo,src:key,title:meta("Title")||ob._label||"Untitled",
+      artist:[...new Set(arr(pr.part).flatMap(x=>arr(x.carried_out_by)).map(a=>a._label).filter(Boolean))].join(", ").replace(/^Artist[^:]*:\s*/,"")||meta("Creator","Creator(s)").split(",")[0],
+      year:yearOf(ts.begin_of_the_begin),date:(arr(ts.identified_by)[0]||{}).content||meta("Date"),medium:[meta("Classification","Collection"),meta("Medium")].filter(Boolean).join(" · "),
+      w:+(body.width||cv.width),h:+(body.height||cv.height),thumb:iiif+"/full/!400,400/0/default.jpg",preview:iiif+"/full/!1200,1200/0/default.jpg",iiif,
+      page:arr(man.homepage)[0]?.id||id,download:iiif+"/full/full/0/default.jpg",licence:"CC0",licOk:true,clientMedium:!!o.medium,clientEra:true};
+  })).filter(Boolean);
+  return {items,more:!!d.next};
 }
 
 const adapters={
@@ -435,33 +472,9 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
     return {items,more:(page+1)*100<(d.response?.rowCount||0)};
   },
 
-  /* Yale Center for British Art: LUX search (limited to YCBA's two art collections) → LUX record for date/artist → IIIF manifest for CC0, pixel size and image service */
-  async ycba(o,page){
-    const PS="Paintings and Sculpture Collection, Yale Center for British Art",PD="Prints and Drawings Collection, Yale Center for British Art";
-    const sets=o.medium==="painting"?[PS]:o.medium?[PD]:[PS,PD];
-    const q={AND:[{hasDigitalImage:1},{OR:sets.map(n=>({memberOf:{name:n}}))}]};
-    if(o.q)q.AND.unshift({text:o.q});
-    const d=await getJSON("https://lux.collections.yale.edu/api/search/item?"+new URLSearchParams({q:JSON.stringify(q),page:String(page+1),pageLength:"24"}));
-    const ids=arr(d.orderedItems).map(x=>x.id).filter(Boolean);
-    const items=(await pool(ids,6,async id=>{
-      const ob=await getJSON(id);
-      const thumbs=arr(ob.representation).flatMap(r=>arr(r.digitally_shown_by)).flatMap(x=>arr(x.access_point)).map(a=>a.id||"");
-      const objNo=(thumbs.map(t=>t.match(/\/ycba\/obj\/(\d+)/)).find(Boolean)||[])[1];if(!objNo)return null;
-      const man=await getJSON("https://manifests.collections.yale.edu/ycba/obj/"+objNo);
-      if(!/publicdomain/.test(man.rights||""))return null;
-      const cv=arr(man.items)[0];if(!cv)return null;
-      const body=arr(cv.items)[0]?.items?.[0]?.body||{};
-      const iiif=arr(body.service).map(x=>x["@id"]||x.id).find(Boolean);if(!iiif)return null;
-      const meta=k=>(arr(man.metadata).find(m=>arr(m.label?.en)[0]===k)?.value?.en||[])[0]||"";
-      const pr=ob.produced_by||{},ts=pr.timespan||{};
-      return {id:"ycba-"+objNo,src:"ycba",title:meta("Title")||ob._label||"Untitled",
-        artist:[...new Set(arr(pr.part).flatMap(x=>arr(x.carried_out_by)).map(a=>a._label).filter(Boolean))].join(", ")||meta("Creator").split(",")[0],
-        year:yearOf(ts.begin_of_the_begin),date:(arr(ts.identified_by)[0]||{}).content||"",medium:[meta("Collection"),meta("Medium")].filter(Boolean).join(" · "),
-        w:+(body.width||cv.width),h:+(body.height||cv.height),thumb:iiif+"/full/!400,400/0/default.jpg",preview:iiif+"/full/!1200,1200/0/default.jpg",iiif,
-        page:arr(man.homepage)[0]?.id||id,download:iiif+"/full/full/0/default.jpg",licence:"CC0",licOk:true,clientMedium:!!o.medium,clientEra:true};
-    })).filter(Boolean);
-    return {items,more:!!d.next};
-  },
+  /* Yale (YCBA + Yale University Art Gallery): LUX search limited to the museum's art collections → LUX record for date/artist → IIIF manifest for CC0, pixel size and image service */
+  ycba:(o,page)=>yale("ycba",o,page),
+  yuag:(o,page)=>yale("yuag",o,page),
 
   /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
   async nga(o,page,_,st){
