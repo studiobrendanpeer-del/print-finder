@@ -49,6 +49,7 @@ button.st:hover{border-color:var(--muted)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer}
 .card:hover{border-color:var(--muted)}
 .thumb{aspect-ratio:1/1;background:var(--chip);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.nothumb{color:var(--muted);font-size:12px;padding:16px;text-align:center}
 .thumb img{max-width:100%;max-height:100%;object-fit:contain}
 .maxa{padding:8px 12px 0;font:600 17px/1.2 Georgia,"Times New Roman",serif;display:flex;align-items:baseline;gap:8px}
 .maxa span{font:12px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--muted)}
@@ -313,7 +314,7 @@ const adapters={
     const items=(d.data||[]).filter(a=>a.image_id&&a.thumbnail?.width).map(a=>({
       id:"aic-"+a.id,src:"aic",title:a.title,artist:a.artist_title||"",year:a.date_start,date:a.date_display||"",
       medium:[a.artwork_type_title,a.medium_display].filter(Boolean).join(" · "),w:a.thumbnail.width,h:a.thumbnail.height,
-      thumb:`${iiif}/${a.image_id}/full/400,/0/default.jpg`,preview:`${iiif}/${a.image_id}/full/843,/0/default.jpg`,
+      thumb:`${iiif}/${a.image_id}/full/400,/0/default.jpg`,thumbAlt:[`${iiif}/${a.image_id}/full/843,/0/default.jpg`].filter(Boolean),preview:`${iiif}/${a.image_id}/full/843,/0/default.jpg`,
       iiif:`${iiif}/${a.image_id}`,page:`https://www.artic.edu/artworks/${a.id}`,download:`${iiif}/${a.image_id}/full/full/0/default.jpg`,
       licence:"CC0",licOk:true,sizeNote:"Size is the museum's master file; the download server may cap it — use \"Check downloadable size\"."}));
     return {items,more:(d.pagination?.current_page||0)<(d.pagination?.total_pages||0)};
@@ -720,12 +721,14 @@ function card(it,o){
   const src=SOURCES.find(s=>s.key===it.src);
   const d=document.createElement("div");d.className="card";d.dataset.id=it.id;
   const f=fit(it,o);
-  d.innerHTML=`<div class="thumb"><img loading="lazy" alt="" src="${esc(it.thumb||"")}" referrerpolicy="no-referrer"></div>
+  d.innerHTML=`<div class="thumb"><img loading="lazy" alt="" src="${esc(it.thumb||"")}" referrerpolicy="no-referrer"><span class="nothumb" hidden>Preview blocked by the museum — click for details</span></div>
   <div class="maxa" title="Largest A size at ${o.dpi} dpi (${f.eff} dpi at that size)">Max ${esc(f.maxA)}<span>${f.maxS.toFixed(0)} × ${f.maxL.toFixed(0)} cm</span></div>
   <div class="meta"><div class="t"><button class="star ${on?"on":""}" title="Shortlist">${on?"★":"☆"}</button>${esc(it.title)}</div>
   <div class="a">${esc(it.artist||"Unknown")}${it.date?" · "+esc(it.date):""}</div>
   <div class="a">${esc(it.provider||src.name.replace(/ \(300\+.*\)/,""))}</div>
   <div class="badges">${badgeHTML(it,o)}</div></div>`;
+  const img=d.querySelector(".thumb img"),alts=[...(it.thumbAlt||[])];
+  img.onerror=()=>{if(alts.length)img.src=alts.shift();else{img.hidden=true;d.querySelector(".nothumb").hidden=false;}};
   d.querySelector(".star").onclick=e=>{e.stopPropagation();toggleShort(it);};
   d.onclick=()=>openDetail(it);
   return d;
