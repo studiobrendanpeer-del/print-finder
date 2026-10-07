@@ -85,7 +85,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 12 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
+  <p class="sub">Searches 13 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -129,10 +129,10 @@ td:first-child{color:var(--muted);width:42%}
 const PAPER={A4:[210,297],A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189],"2A0":[1189,1682],"4A0":[1682,2378]}; // mm short,long
 const SIZES=Object.keys(PAPER); // smallest first; results must reach at least A4
 const MED={
-  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
-  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
-  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
-  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
+  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",mia:"Paintings",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
+  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",mia:"Drawings",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
+  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",mia:"Prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
+  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",mia:"Photographs",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
 };
 const SOURCES=[
   {key:"rijks",name:"Rijksmuseum",cc0:true},
@@ -142,6 +142,7 @@ const SOURCES=[
   {key:"met",name:"The Met (New York)",cc0:true},
   {key:"getty",name:"Getty Museum (Los Angeles)",cc0:true},
   {key:"si",name:"Smithsonian (19 museums)",cc0:true},
+  {key:"mia",name:"Minneapolis Institute of Art",cc0:true},
   {key:"ycba",name:"Yale Center for British Art",cc0:true},
   {key:"yuag",name:"Yale University Art Gallery",cc0:true},
   {key:"smk",name:"SMK (Denmark)",cc0:true},
@@ -478,6 +479,22 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
   ycba:(o,page)=>yale("ycba",o,page),
   yuag:(o,page)=>yale("yuag",o,page),
 
+  /* Mia (Minneapolis): search hits carry public-domain status, classification and the pixel size of the master JPEG, which img.artsmia.org serves at full size */
+  async mia(o,page){
+    let q=(o.q||"").replace(/[+\-=&|<>!(){}[\]^"~*?:\\/]/g," ").trim()||"*";
+    q+=' rights_type:"Public Domain" image:valid public_access:1';
+    if(o.medium)q+=" classification:"+MED[o.medium].mia;
+    if(o.from>=1000&&(o.to==null||o.to>=1000))q+=` dated:[${o.from} TO ${o.to??"*"}]`; // "dated" is text: a rough pre-filter, the exact era is checked client-side
+    const d=await getJSON(`https://search.artsmia.org/${encodeURIComponent(q)}?size=100&from=${page*100}`);
+    const items=(d.hits?.hits||[]).map(x=>x._source).filter(a=>a.image_width&&a.image_height&&a.Cache_Location&&a.Primary_RenditionNumber).map(a=>{
+      const img=`https://img.artsmia.org/web_objects_cache/${a.Cache_Location.replace(/\\/g,"/")}/${a.Primary_RenditionNumber.replace(/\.\w+$/,"")}_`;
+      return {id:"mia-"+a.id,src:"mia",title:String(a.title||"Untitled").replace(/<[^>]+>/g,""),artist:(a.artist||"").split(";")[0].replace(/^[A-Za-z ]+:\s*/,"")||a.culture||a.country||"",
+        year:yearOf(a.dated),date:a.dated||"",medium:[a.classification,a.object_name,a.medium].filter(Boolean).join(" · "),w:+a.image_width,h:+a.image_height,
+        thumb:img+"400.jpg",preview:img+"800.jpg",page:"https://collections.artsmia.org/art/"+a.id,download:img+"full.jpg",licence:"Public domain",licOk:true,clientEra:true};
+    });
+    return {items,more:(page+1)*100<Math.min(d.hits?.total?.value||0,10000)};
+  },
+
   /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
   async nga(o,page,_,st){
     await loadNGA();
@@ -693,7 +710,7 @@ function openDetail(it){
   $("pix").onclick=()=>{
     const box=$("cropbox");let url=null;
     if(it.iiif){const cw=1000,ch=700,x=Math.max(0,Math.round(it.w/2-cw/2)),y=Math.max(0,Math.round(it.h/2-ch/2));url=`${it.iiif}/${x},${y},${cw},${ch}/full/0/default.jpg`;}
-    else if(["wm","met","si"].includes(it.src)&&/\.(jpe?g|png)$/i.test(it.download))url=it.download;
+    else if(["wm","met","si","mia"].includes(it.src)&&/\.(jpe?g|png)$/i.test(it.download))url=it.download;
     else if(it.src==="cma"&&it.downloadAlt){box.innerHTML='<div class="note">Cleveland\'s full file is a TIFF (not viewable in a browser). Open the JPEG version and zoom in instead.</div>';return;}
     if(!url){box.innerHTML='<div class="note">No 100% view available for this source.</div>';return;}
     box.innerHTML=`<div class="crop" id="cr"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer"></div><div class="note">Actual pixels from the centre of the image. At ${o.dpi} dpi, ${o.dpi} of these pixels = 1 inch of print. Look for blur, JPEG blocks and halftone dots.</div>`;
