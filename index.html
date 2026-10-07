@@ -80,6 +80,15 @@ td:first-child{color:var(--muted);width:42%}
 .crop img{max-width:none;max-height:none;display:block}
 .note{font-size:12px;color:var(--muted)}
 #shortlist{position:fixed;right:16px;bottom:16px}
+#bpop{position:fixed;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;width:260px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:grid;gap:8px;font-size:14px}
+#bpop label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);font-weight:400;letter-spacing:0;cursor:pointer}
+#bpop .new{display:flex;gap:6px}#bpop .new input{flex:1;min-width:0}
+.bpills{display:flex;flex-wrap:wrap;gap:6px}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.bitem{border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:12px;display:grid}
+.bitem img{width:100%;aspect-ratio:1/1;object-fit:contain;background:var(--chip)}
+.bitem div{padding:6px 8px;display:grid;gap:2px}
+.bitem a{color:var(--accent)}
 .x{position:absolute;right:10px;top:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:16px;z-index:2}
 </style>
 </head>
@@ -119,7 +128,8 @@ td:first-child{color:var(--muted);width:42%}
 <div class="empty" id="empty" hidden></div>
 <div class="empty" id="more" hidden></div>
 </div>
-<button class="btn" id="shortlist">Shortlist (0)</button>
+<button class="btn" id="shortlist">Boards</button>
+<div id="bpop" hidden></div>
 
 <dialog id="dlg"><button class="x" id="close" aria-label="Close">✕</button><div id="dbody"></div></dialog>
 <dialog id="sdlg"><button class="x" id="sclose" aria-label="Close">✕</button><div class="dinfo" id="sbody"></div></dialog>
@@ -170,7 +180,11 @@ const yearOf=s=>{const m=String(s??"").match(/(1[0-9]{3}|20[0-2][0-9])/);return 
 
 /* ---------- storage (per-browser convenience only) ---------- */
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-let shortlist=store.get("pf_shortlist",[]);
+/* boards: [{id,name,items:[snapshot]}]; the old single shortlist becomes a board called "Shortlist" */
+let boards=store.get("pf_boards",null);
+if(!boards){const old=store.get("pf_shortlist",[]);boards=old.length?[{id:"b"+Date.now(),name:"Shortlist",items:old}]:[];store.set("pf_boards",boards);}
+const saveBoards=()=>store.set("pf_boards",boards);
+const inAnyBoard=id=>boards.some(b=>b.items.some(x=>x.id===id));
 
 /* ---------- UI setup ---------- */
 const offSrcs=new Set(store.get("pf_off",[])); // sources the viewer unticked, remembered in this browser
@@ -574,7 +588,8 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
   async nga(o,page,_,st){
     await loadNGA();
     if(!st.list){
-      const words=o.q.toLowerCase().split(/\s+/).filter(Boolean);
+      // whole words, plurals allowed: "iris" finds "irises" but not "Irish", "flower" finds "flowers"
+      const words=o.q.toLowerCase().split(/\s+/).filter(Boolean).map(w=>new RegExp("(^|[^\\p{L}\\p{N}])"+w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(e?s)?($|[^\\p{L}\\p{N}])","u"));
       const cls={painting:"p",drawing:"d",print:"r",photograph:"f"}[o.medium];
       st.list=window.NGA_INDEX.filter(r=>{
         if(cls&&r[8]!==cls)return false;
@@ -582,7 +597,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
         if(o.to!=null&&(r[6]??1e9)>o.to)return false;
         if(!words.length)return true;
         const hay=(r[3]+" "+r[4]+" "+r[9]+" "+r[10]).toLowerCase();
-        return words.every(w=>hay.includes(w));
+        return words.every(w=>w.test(hay));
       });
     }
     const slice=page?[]:st.list;
@@ -729,19 +744,19 @@ function badgeHTML(it,o){
     `<span class="b ${src.cc0?"ok":"warn"}">${src.cc0?"CC0":esc(it.licence)}</span>`;
 }
 function card(it,o){
-  const on=shortlist.some(s=>s.id===it.id);
+  const on=inAnyBoard(it.id);
   const src=SOURCES.find(s=>s.key===it.src);
   const d=document.createElement("div");d.className="card";d.dataset.id=it.id;
   const f=fit(it,o);
   d.innerHTML=`<div class="thumb"><img loading="lazy" alt="" src="${esc(it.thumb||"")}" referrerpolicy="no-referrer"><span class="nothumb" hidden>Preview blocked by the museum — click for details</span></div>
   <div class="maxa" title="Largest A size at ${o.dpi} dpi (${f.eff} dpi at that size)">Max ${esc(f.maxA)}<span>${f.maxS.toFixed(0)} × ${f.maxL.toFixed(0)} cm</span></div>
-  <div class="meta"><div class="t"><button class="star ${on?"on":""}" title="Shortlist">${on?"★":"☆"}</button>${esc(it.title)}</div>
+  <div class="meta"><div class="t"><button class="star ${on?"on":""}" title="Save to board">${on?"★":"☆"}</button>${esc(it.title)}</div>
   <div class="a">${esc(it.artist||"Unknown")}${it.date?" · "+esc(it.date):""}</div>
   <div class="a">${esc(it.provider||src.name.replace(/ \(300\+.*\)/,""))}</div>
   <div class="badges">${badgeHTML(it,o)}</div></div>`;
   const img=d.querySelector(".thumb img"),alts=[...(it.thumbAlt||[])];
   img.onerror=()=>{if(alts.length)img.src=alts.shift();else{img.hidden=true;d.querySelector(".nothumb").hidden=false;}};
-  d.querySelector(".star").onclick=e=>{e.stopPropagation();toggleShort(it);};
+  d.querySelector(".star").onclick=e=>{e.stopPropagation();boardPicker(it,e.currentTarget);};
   d.onclick=()=>openDetail(it);
   return d;
 }
@@ -785,9 +800,9 @@ function openDetail(it){
   <div class="links"><a href="${esc(it.page)}" target="_blank" rel="noopener">Museum page ↗</a><a href="${esc(it.download)}" target="_blank" rel="noopener">Full-size file ↗</a>${it.downloadAlt?`<a href="${esc(it.downloadAlt)}" target="_blank" rel="noopener">JPEG version ↗</a>`:""}</div>
   <button class="btn ghost" id="pix" type="button">View 100% detail (pixel-peep)</button>
   <div id="cropbox"></div>
-  <button class="btn" id="sl" type="button">${shortlist.some(s=>s.id===it.id)?"Remove from shortlist":"Add to shortlist"}</button>
+  <button class="btn" id="sl" type="button">Save to board…</button>
   </div></div>`;
-  $("sl").onclick=()=>{toggleShort(it);$("sl").textContent=shortlist.some(s=>s.id===it.id)?"Remove from shortlist":"Add to shortlist"};
+  $("sl").onclick=e=>boardPicker(it,e.currentTarget);
   if($("chk"))$("chk").onclick=async()=>{
     $("dl").textContent="Checking…";
     try{const d=await getJSON(it.iiif+"/info.json");
@@ -815,27 +830,79 @@ function openDetail(it){
 $("close").onclick=()=>$("dlg").close();
 $("dlg").addEventListener("click",e=>{if(e.target===$("dlg"))$("dlg").close()});
 
-/* ---------- shortlist ---------- */
-function toggleShort(it){
-  const i=shortlist.findIndex(s=>s.id===it.id);
-  if(i>=0)shortlist.splice(i,1);else shortlist.push({id:it.id,src:it.src,title:it.title,artist:it.artist,date:it.date,w:it.w,h:it.h,thumb:it.thumb,page:it.page,download:it.download,licence:it.licence});
-  store.set("pf_shortlist",shortlist);updateShortBtn();
-  const c=document.querySelector(`.card[data-id="${CSS.escape(it.id)}"] .star`);
-  if(c){const on=i<0;c.classList.toggle("on",on);c.textContent=on?"★":"☆";}
+/* ---------- boards ---------- */
+const snap=it=>({id:it.id,src:it.src,title:it.title,artist:it.artist,date:it.date,w:it.w,h:it.h,thumb:it.thumb,page:it.page,download:it.download,licence:it.licence});
+function refreshStars(id){
+  const on=inAnyBoard(id);
+  document.querySelectorAll(`.card[data-id="${CSS.escape(id)}"] .star`).forEach(c=>{c.classList.toggle("on",on);c.textContent=on?"★":"☆";});
+  updateShortBtn();
 }
-function updateShortBtn(){$("shortlist").textContent=`Shortlist (${shortlist.length})`;}
+function newBoard(name){const b={id:"b"+Date.now()+Math.random().toString(36).slice(2,6),name:name.trim()||"Untitled board",items:[]};boards.push(b);saveBoards();return b;}
+/* small menu next to the clicked button: tick boards to add/remove the item, or create a new one */
+function boardPicker(it,anchor){
+  const pop=$("bpop");
+  const draw=()=>{
+    pop.innerHTML=`<b>Save to board</b>${boards.map(b=>`<label><input type="checkbox" data-b="${b.id}" ${b.items.some(x=>x.id===it.id)?"checked":""}> ${esc(b.name)} <span class="note">(${b.items.length})</span></label>`).join("")||'<span class="note">No boards yet — create one:</span>'}
+      <div class="new"><input type="text" placeholder="New board name" maxlength="60"><button class="btn" type="button">Add</button></div>`;
+    pop.querySelectorAll("[data-b]").forEach(cb=>cb.onchange=()=>{
+      const b=boards.find(x=>x.id===cb.dataset.b);
+      if(cb.checked){if(!b.items.some(x=>x.id===it.id))b.items.push(snap(it));}else b.items=b.items.filter(x=>x.id!==it.id);
+      saveBoards();refreshStars(it.id);draw();});
+    const inp=pop.querySelector(".new input"),add=()=>{if(!inp.value.trim())return inp.focus();const b=newBoard(inp.value);b.items.push(snap(it));saveBoards();refreshStars(it.id);draw();};
+    pop.querySelector(".new button").onclick=add;inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();add();}};
+  };
+  draw();
+  // show inside an open dialog so it isn't hidden behind the modal layer
+  const host=anchor.closest("dialog")||document.body;if(pop.parentNode!==host)host.appendChild(pop);
+  pop.hidden=false;
+  const r=anchor.getBoundingClientRect(),pw=pop.offsetWidth,ph=pop.offsetHeight;
+  pop.style.left=Math.max(8,Math.min(innerWidth-pw-8,r.right-pw))+"px";
+  pop.style.top=(r.bottom+6+ph>innerHeight?Math.max(8,r.top-ph-6):r.bottom+6)+"px";
+}
+// composedPath still includes the popover when the clicked element was replaced by a redraw
+document.addEventListener("click",e=>{const pop=$("bpop");if(!pop.hidden&&!e.composedPath().includes(pop)&&!e.target.closest(".star,#sl"))pop.hidden=true;});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("bpop").hidden=true;});
+function updateShortBtn(){const n=boards.reduce((a,b)=>a+b.items.length,0);$("shortlist").textContent=`Boards (${boards.length})${n?" · "+n+" saved":""}`;}
 updateShortBtn();
-$("shortlist").onclick=()=>{
-  const rows=shortlist.map((s,i)=>`<tr><td><img src="${esc(s.thumb)}" alt="" style="width:60px;height:60px;object-fit:contain" referrerpolicy="no-referrer"></td><td><b>${esc(s.title)}</b><br><span class="note">${esc(s.artist||"")} · ${s.w}×${s.h} · ${esc(s.licence)}</span><br><a href="${esc(s.page)}" target="_blank" rel="noopener">page</a> · <a href="${esc(s.download)}" target="_blank" rel="noopener">file</a> · <a href="#" data-rm="${i}">remove</a></td></tr>`).join("");
-  $("sbody").innerHTML=`<h2>Shortlist</h2>${shortlist.length?`<table>${rows}</table><div class="links"><button class="btn" id="csv" type="button">Download CSV</button></div>`:'<p class="note">Star results to collect them here. Saved in this browser only.</p>'}`;
-  $("sbody").querySelectorAll("[data-rm]").forEach(a=>a.onclick=e=>{e.preventDefault();shortlist.splice(+a.dataset.rm,1);store.set("pf_shortlist",shortlist);updateShortBtn();$("shortlist").onclick();});
-  if($("csv"))$("csv").onclick=()=>{
-    const head=["title","artist","date","width_px","height_px","licence","source","page","download"];
-    const lines=[head.join(",")].concat(shortlist.map(s=>[s.title,s.artist,s.date,s.w,s.h,s.licence,s.src,s.page,s.download].map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")));
-    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv"}));a.download="print-shortlist.csv";a.click();
+let curBoard=null;
+function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();}
+function showBoards(){
+  if(!boards.some(b=>b.id===curBoard))curBoard=boards[0]?.id||null;
+  const b=boards.find(x=>x.id===curBoard),o=opts();
+  $("sbody").innerHTML=`<h2>Boards</h2>
+  <p class="note">Saved in this browser only — use Backup now and then, and Import to move boards to another device.</p>
+  <div class="bpills">${boards.map(x=>`<button type="button" class="chip ${x.id===curBoard?"on":""}" data-pick="${x.id}">${esc(x.name)} (${x.items.length})</button>`).join("")}
+    <button type="button" class="chip" id="bnew">＋ New board</button></div>
+  ${b?`<div class="links"><button class="btn ghost" type="button" id="bren">Rename</button><button class="btn ghost" type="button" id="bdel">Delete board</button>${b.items.length?'<button class="btn ghost" type="button" id="csv">Download CSV</button>':""}</div>
+  ${b.items.length?`<div class="bgrid">${b.items.map((x,i)=>{const f=fit(x,o);return `<div class="bitem"><img src="${esc(x.thumb)}" alt="" referrerpolicy="no-referrer" loading="lazy"><div><b>${esc(x.title)}</b><span class="note">${esc(x.artist||"")}</span><span>${f.pass?"Max "+f.maxA:"Below A4"} · ${x.w}×${x.h}</span><span><a href="${esc(x.page)}" target="_blank" rel="noopener">page</a> · <a href="${esc(x.download)}" target="_blank" rel="noopener">file</a> · <a href="#" data-rm="${i}">remove</a></span></div></div>`}).join("")}</div>`
+    :'<p class="note">Empty. Click ☆ on any result to save it here.</p>'}`
+  :'<p class="note">No boards yet. Create one here, or click ☆ on any result.</p>'}
+  <div class="links" style="margin-top:8px"><button class="btn ghost" type="button" id="bexp">Backup all boards</button><button class="btn ghost" type="button" id="bimp">Import backup</button><input type="file" id="bfile" accept=".json,application/json" hidden></div>`;
+  const S=$("sbody");
+  S.querySelectorAll("[data-pick]").forEach(x=>x.onclick=()=>{curBoard=x.dataset.pick;showBoards();});
+  $("bnew").onclick=()=>{const n=prompt("Board name");if(n==null)return;curBoard=newBoard(n).id;updateShortBtn();showBoards();};
+  if(b){
+    $("bren").onclick=()=>{const n=prompt("Rename board",b.name);if(n&&n.trim()){b.name=n.trim();saveBoards();showBoards();}};
+    $("bdel").onclick=()=>{if(!confirm(`Delete "${b.name}" and its ${b.items.length} saved items?`))return;boards=boards.filter(x=>x!==b);saveBoards();b.items.forEach(x=>refreshStars(x.id));updateShortBtn();showBoards();};
+    S.querySelectorAll("[data-rm]").forEach(a=>a.onclick=e=>{e.preventDefault();const [x]=b.items.splice(+a.dataset.rm,1);saveBoards();refreshStars(x.id);showBoards();});
+    if($("csv"))$("csv").onclick=()=>{
+      const head=["title","artist","date","width_px","height_px","licence","source","page","download"];
+      download(b.name.replace(/[^\w-]+/g,"-")+".csv",[head.join(",")].concat(b.items.map(x=>[x.title,x.artist,x.date,x.w,x.h,x.licence,x.src,x.page,x.download].map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","))).join("\n"),"text/csv");
+    };
+  }
+  $("bexp").onclick=()=>download("print-finder-boards.json",JSON.stringify({version:1,boards},null,1),"application/json");
+  $("bimp").onclick=()=>$("bfile").click();
+  $("bfile").onchange=async()=>{
+    try{const d=JSON.parse(await $("bfile").files[0].text());const inc=arr(d.boards).filter(x=>x&&x.name&&Array.isArray(x.items));
+      if(!inc.length)throw new Error("no boards in file");
+      // merge: same-named boards gain the missing items, others are added
+      for(const x of inc){const t=boards.find(y=>y.name===x.name);if(t)x.items.forEach(i=>{if(i.id&&!t.items.some(z=>z.id===i.id))t.items.push(i)});else boards.push({id:"b"+Date.now()+Math.random().toString(36).slice(2,6),name:x.name,items:x.items.filter(i=>i.id)});}
+      saveBoards();updateShortBtn();document.querySelectorAll(".card").forEach(c=>refreshStars(c.dataset.id));showBoards();alert(`Imported ${inc.length} board(s).`);
+    }catch(e){alert("Couldn't import: "+e.message);}
   };
   if(!$("sdlg").open)$("sdlg").showModal();
-};
+}
+$("shortlist").onclick=showBoards;
 $("sclose").onclick=()=>$("sdlg").close();
 
 /* ---------- self-test: one small live search per source, run from the viewer's browser ---------- */
