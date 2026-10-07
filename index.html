@@ -83,7 +83,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 8 open-access collections and keeps only public domain images with enough pixels for your print size.</p>
+  <p class="sub">Searches 9 open-access collections and keeps only public domain images with enough pixels for your print size.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -125,10 +125,10 @@ td:first-child{color:var(--muted);width:42%}
 /* ---------- constants ---------- */
 const PAPER={A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189]}; // mm short,long
 const MED={
-  painting:{cma:"Painting",aic:"Painting",met:"Paintings",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
-  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
-  print:{cma:"Print",aic:"Print",met:"Prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
-  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
+  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
+  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
+  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
+  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
 };
 const SOURCES=[
   {key:"rijks",name:"Rijksmuseum",cc0:true},
@@ -136,6 +136,7 @@ const SOURCES=[
   {key:"cma",name:"Cleveland Museum of Art",cc0:true},
   {key:"aic",name:"Art Institute of Chicago",cc0:true},
   {key:"met",name:"The Met (New York)",cc0:true},
+  {key:"getty",name:"Getty Museum (Los Angeles)",cc0:true},
   {key:"smk",name:"SMK (Denmark)",cc0:true},
   {key:"eu",name:"Europeana (300+ European museums)",cc0:true},
   {key:"wm",name:"Wikimedia Commons",cc0:false}
@@ -371,6 +372,41 @@ const adapters={
         page:a.objectURL,download:a.primaryImage,licence:"CC0",licOk:true};
     })).filter(Boolean);
     return {items,more:(page+1)*24<(d.total||0)};
+  },
+
+  /* Getty: SPARQL finds objects with images; each image record gives its CC0 status, pixel size and IIIF service */
+  async getty(o,page){
+    const words=o.q.toLowerCase().replace(/["\\]/g," ").split(/\s+/).filter(Boolean);
+    const q=`PREFIX crm: <http://www.cidoc-crm.org/cidoc-crm/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAMPLE(?b) AS ?begin) (GROUP_CONCAT(DISTINCT ?an; separator=", ") AS ?artist) WHERE {
+ ?o a crm:E22_Human-Made_Object ; rdfs:label ?l ; crm:P65_shows_visual_item ?vi .
+ ${o.medium?`?o crm:P2_has_type <http://vocab.getty.edu/aat/${MED[o.medium].getty}> .`:""}
+ ${words.map(w=>`FILTER(CONTAINS(LCASE(?l),"${w}"))`).join("\n ")}
+ OPTIONAL { ?o crm:P129i_is_subject_of ?pg FILTER(STRSTARTS(STR(?pg),"https://www.getty.edu/art/collection/")) }
+ OPTIONAL { ?o crm:P108i_was_produced_by ?pr .
+  OPTIONAL { ?pr crm:P14_carried_out_by ?a . ?a rdfs:label ?an }
+  OPTIONAL { ?pr crm:P9_consists_of ?pp . ?pp crm:P14_carried_out_by ?a2 . ?a2 rdfs:label ?an }
+  OPTIONAL { ?pr crm:P4_has_time-span ?ts . ?ts crm:P82a_begin_of_the_begin ?b } }
+} GROUP BY ?o ORDER BY ?o LIMIT 24 OFFSET ${page*24}`;
+    const d=await getJSON("https://data.getty.edu/museum/collection/sparql?"+new URLSearchParams({query:q,format:"json"}));
+    const rows=d.results?.bindings||[];
+    const val=(r,k)=>r[k]?.value||"";
+    const items=(await pool(rows,6,async r=>{
+      const v=await getJSON(val(r,"v"));
+      const rights=arr(v.subject_to).flatMap(x=>arr(x.classified_as)).map(c=>c.id||"").join(" ");
+      if(!/publicdomain/.test(rights))return null;
+      const dobj=arr(v.digitally_shown_by)[0]||{};
+      const dim=lab=>+(arr(dobj.dimension).find(x=>arr(x.classified_as).some(c=>c._label===lab))||{}).value||0;
+      const iiif=arr(dobj.access_point).map(a=>a.id||"").find(x=>/\/iiif\/image\/[^/]+$/.test(x));
+      if(!iiif)return null;
+      const label=val(r,"label"),year=yearOf(val(r,"begin"));
+      return {id:"getty-"+val(r,"o").split("/").pop(),src:"getty",title:label.replace(/\s*\([^()]*\)\s*$/,"")||"Untitled",artist:[...new Set(val(r,"artist").split(", ").filter(Boolean))].join(", "),
+        year,date:year?String(year):"",medium:"",w:dim("Width"),h:dim("Height"),
+        thumb:iiif+"/full/!400,400/0/default.jpg",preview:iiif+"/full/!1200,1200/0/default.jpg",iiif,
+        page:val(r,"page")||val(r,"o"),download:iiif+"/full/max/0/default.jpg",licence:/zero/.test(rights)?"CC0":"Public domain",licOk:true,clientEra:true};
+    })).filter(Boolean);
+    return {items,more:rows.length===24};
   },
 
   /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
