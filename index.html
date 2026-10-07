@@ -83,7 +83,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 7 open-access collections and keeps only public domain images with enough pixels for your print size.</p>
+  <p class="sub">Searches 8 open-access collections and keeps only public domain images with enough pixels for your print size.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -125,16 +125,17 @@ td:first-child{color:var(--muted);width:42%}
 /* ---------- constants ---------- */
 const PAPER={A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189]}; // mm short,long
 const MED={
-  painting:{cma:"Painting",aic:"Painting",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
-  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
-  print:{cma:"Print",aic:"Print",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
-  photograph:{cma:"Photograph",aic:"Photograph",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
+  painting:{cma:"Painting",aic:"Painting",met:"Paintings",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
+  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
+  print:{cma:"Print",aic:"Print",met:"Prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
+  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
 };
 const SOURCES=[
   {key:"rijks",name:"Rijksmuseum",cc0:true},
   {key:"nga",name:"National Gallery of Art (DC)",cc0:true},
   {key:"cma",name:"Cleveland Museum of Art",cc0:true},
   {key:"aic",name:"Art Institute of Chicago",cc0:true},
+  {key:"met",name:"The Met (New York)",cc0:true},
   {key:"smk",name:"SMK (Denmark)",cc0:true},
   {key:"eu",name:"Europeana (300+ European museums)",cc0:true},
   {key:"wm",name:"Wikimedia Commons",cc0:false}
@@ -208,6 +209,24 @@ const EN="300388277";
 const isEn=o=>arr(o.language).some(l=>String(l.id||"").endsWith(EN));
 const notation=(n,lang="en")=>{const a=arr(n);return (a.find(x=>x["@language"]===lang)||a[0]||{})["@value"]||"";};
 const rijksData=id=>String(id).replace("https://id.rijksmuseum.nl/","https://data.rijksmuseum.nl/")+"?_profile=la-framed";
+/* pixel size from a JPEG's header: reads only the first bytes of the file (needs CORS + Range on the image host) */
+async function jpegSize(url){
+  for(const n of [65536,262144]){
+    const c=new AbortController(),t=setTimeout(()=>c.abort(),20000);
+    let b;try{const r=await fetch(url,{headers:{Range:"bytes=0-"+(n-1)},signal:c.signal});if(!r.ok)return null;b=new Uint8Array(await r.arrayBuffer());}
+    finally{clearTimeout(t)}
+    let i=2;
+    while(i+9<b.length){
+      if(b[i]!==0xFF){i++;continue}
+      const m=b[i+1];
+      if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue}
+      if(m>=0xC0&&m<=0xCF&&m!==0xC4&&m!==0xC8&&m!==0xCC)return {h:b[i+5]<<8|b[i+6],w:b[i+7]<<8|b[i+8]};
+      i+=2+(b[i+2]<<8|b[i+3]);
+    }
+    if(b.length<n)return null; // whole file read, no size found
+  }
+  return null;
+}
 let ngaLoading=null;
 function loadNGA(){
   if(window.NGA_INDEX)return Promise.resolve();
@@ -334,6 +353,24 @@ const adapters={
         download:iiif+"/full/max/0/default.jpg",licence:/zero/.test(rights)?"CC0":"Public domain",licOk:true,clientEra:true};
     })).filter(Boolean);
     return {items,more:st.buf.length>0||st.streams.some(s=>s.url)};
+  },
+
+  /* The Met: search returns IDs; each object is checked for public domain, then its pixel size is read from the JPEG header */
+  async met(o,page){
+    const p=new URLSearchParams({q:o.q||"*",hasImages:"true",limit:"24",offset:String(page*24)}); // isPublicDomain is ignored by v1.1, so checked per object
+    if(o.medium)p.set("medium",MED[o.medium].met);
+    if(o.from!=null||o.to!=null){p.set("dateBegin",o.from??-5000);p.set("dateEnd",o.to??2100);}
+    const d=await getJSON("https://collectionapi.metmuseum.org/public/collection/v1.1/search?"+p);
+    const ids=d.objectIDs||[];
+    const items=(await pool(ids,6,async x=>{
+      const a=await getJSON("https://collectionapi.metmuseum.org/public/collection/v1/objects/"+x);
+      if(!a.isPublicDomain||!a.primaryImage)return null;
+      const sz=await jpegSize(a.primaryImage);if(!sz)return null;
+      return {id:"met-"+a.objectID,src:"met",title:a.title||"Untitled",artist:a.artistDisplayName||a.culture||"",year:a.objectBeginDate??yearOf(a.objectDate),date:a.objectDate||"",
+        medium:[a.classification||a.objectName,a.medium].filter(Boolean).join(" · "),w:sz.w,h:sz.h,thumb:a.primaryImageSmall||a.primaryImage,preview:a.primaryImageSmall||a.primaryImage,
+        page:a.objectURL,download:a.primaryImage,licence:"CC0",licOk:true};
+    })).filter(Boolean);
+    return {items,more:(page+1)*24<(d.total||0)};
   },
 
   /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
@@ -540,7 +577,7 @@ function openDetail(it){
   $("pix").onclick=()=>{
     const box=$("cropbox");let url=null;
     if(it.iiif){const cw=1000,ch=700,x=Math.max(0,Math.round(it.w/2-cw/2)),y=Math.max(0,Math.round(it.h/2-ch/2));url=`${it.iiif}/${x},${y},${cw},${ch}/full/0/default.jpg`;}
-    else if(it.src==="wm"&&/\.(jpe?g|png)$/i.test(it.download))url=it.download;
+    else if((it.src==="wm"||it.src==="met")&&/\.(jpe?g|png)$/i.test(it.download))url=it.download;
     else if(it.src==="cma"&&it.downloadAlt){box.innerHTML='<div class="note">Cleveland\'s full file is a TIFF (not viewable in a browser). Open the JPEG version and zoom in instead.</div>';return;}
     if(!url){box.innerHTML='<div class="note">No 100% view available for this source.</div>';return;}
     box.innerHTML=`<div class="crop" id="cr"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer"></div><div class="note">Actual pixels from the centre of the image. At ${o.dpi} dpi, ${o.dpi} of these pixels = 1 inch of print. Look for blur, JPEG blocks and halftone dots.</div>`;
