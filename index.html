@@ -109,8 +109,9 @@ td:first-child{color:var(--muted);width:42%}
 </form>
 <div id="status"></div>
 <div class="row" id="tools" hidden style="margin:0 0 14px">
-  <label>Sort<select id="sort"><option value="res">Largest print size</option><option value="mp">Most pixels</option><option value="early">Earliest first</option><option value="late">Latest first</option><option value="title">Title A–Z</option></select></label>
+  <label>Sort<select id="sort"><option value="best">Best match</option><option value="res">Largest print size</option><option value="mp">Most pixels</option><option value="early">Earliest first</option><option value="late">Latest first</option><option value="title">Title A–Z</option></select></label>
   <div class="chips" id="orients"><button type="button" class="chip on" data-o="">Any shape</button><button type="button" class="chip" data-o="portrait">Portrait</button><button type="button" class="chip" data-o="landscape">Landscape</button><button type="button" class="chip" data-o="square">Square-ish</button></div>
+  <div class="chips"><button type="button" class="chip on" id="artonly" title="Hides ceramics, sculpture, furniture, costume, coins and other 3-D objects">Artworks only</button></div>
   <div class="chips" id="mins"><button type="button" class="chip on" data-m="">Any size (A4+)</button><button type="button" class="chip" data-m="A3">A3+</button><button type="button" class="chip" data-m="A2">A2+</button><button type="button" class="chip" data-m="A1">A1+</button><button type="button" class="chip" data-m="A0">A0+</button></div>
 </div>
 <div class="grid" id="grid"></div>
@@ -421,10 +422,11 @@ const adapters={
     const words=o.q.toLowerCase().replace(/["\\]/g," ").split(/\s+/).filter(Boolean);
     const q=`PREFIX crm: <http://www.cidoc-crm.org/cidoc-crm/>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAMPLE(?b) AS ?begin) (GROUP_CONCAT(DISTINCT ?an; separator=", ") AS ?artist) WHERE {
+SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAMPLE(?b) AS ?begin) (GROUP_CONCAT(DISTINCT ?an; separator=", ") AS ?artist) (GROUP_CONCAT(DISTINCT ?tl; separator="|") AS ?types) WHERE {
  ?o a crm:E22_Human-Made_Object ; rdfs:label ?l ; crm:P65_shows_visual_item ?vi .
  ${o.medium?`?o crm:P2_has_type <http://vocab.getty.edu/aat/${MED[o.medium].getty}> .`:""}
  ${words.map(w=>`FILTER(CONTAINS(LCASE(?l),"${w}"))`).join("\n ")}
+ OPTIONAL { ?o crm:P2_has_type ?t . ?t rdfs:label ?tl }
  OPTIONAL { ?o crm:P129i_is_subject_of ?pg FILTER(STRSTARTS(STR(?pg),"https://www.getty.edu/art/collection/")) }
  OPTIONAL { ?o crm:P108i_was_produced_by ?pr .
   OPTIONAL { ?pr crm:P14_carried_out_by ?a . ?a rdfs:label ?an }
@@ -444,7 +446,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
       if(!iiif)return null;
       const label=val(r,"label"),year=yearOf(val(r,"begin"));
       return {id:"getty-"+val(r,"o").split("/").pop(),src:"getty",title:label.replace(/\s*\([^()]*\)\s*$/,"")||"Untitled",artist:[...new Set(val(r,"artist").split(", ").filter(Boolean))].join(", "),
-        year,date:year?String(year):"",medium:"",w:dim("Width"),h:dim("Height"),
+        year,date:year?String(year):"",medium:val(r,"types").split("|").filter(t=>t&&!/Object Record|^Artwork$|\(/.test(t)).join(" · "),w:dim("Width"),h:dim("Height"),
         thumb:iiif+"/full/!400,400/0/default.jpg",preview:iiif+"/full/!1200,1200/0/default.jpg",iiif,
         page:val(r,"page")||val(r,"o"),download:iiif+"/full/max/0/default.jpg",licence:/zero/.test(rights)?"CC0":"Public domain",licOk:true,clientEra:true};
     })).filter(Boolean);
@@ -529,7 +531,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
 /* ---------- search engine ---------- */
 const PAGE=12;
 let results=[],seen=new Set(),state={},runId=0;
-let view={src:new Set(),orient:"",min:"",sort:"res",limit:PAGE};
+let view={src:new Set(),orient:"",min:"",art:true,sort:"best",limit:PAGE};
 function keep(it,o){
   if(!(it.w>0&&it.h>0))return false;
   if(!fit(it,o).pass)return false;
@@ -541,14 +543,19 @@ function keep(it,o){
   }
   return true;
 }
-const printable=o=>results.filter(it=>keep(it,o));
+/* "Artworks only": drops 3-D and functional objects, judged only on each museum's own object type / medium text (titles are unreliable: "Vase of Flowers" is usually a picture) */
+const JUNK=/\b(ceramics?|pottery|porcelain|stoneware|earthenware|faience|maiolica|majolica|jade|hardstone|metalwork|gold and silver|silverware|decorative arts?|sculptures?|statuettes?|figurines?|furniture|woodwork|coins?|medals?|numismatics?|jewel(?:le)?ry|costumes?|hats?|headwear|footwear|shoes|dresses|fashion accessor(?:y|ies)|arms and armou?r|weapons?|vessels?|vases?|bowls?|teapots?|clocks?|lighting|specimens?|fossils?|minerals?)\b/i;
+const printable=o=>results.filter(it=>keep(it,o)&&!(view.art&&JUNK.test(it.medium||"")));
 function visible(o){
   let l=printable(o);
   if(view.src.size)l=l.filter(it=>view.src.has(it.src));
   if(view.orient)l=l.filter(it=>orientOf(it)===view.orient);
   if(view.min)l=l.filter(it=>fit(it,o).rank>=SIZES.indexOf(view.min));
   const yr=(it,dir)=>it.year??(dir>0?1e9:-1e9);
-  const by={res:(a,b)=>fit(b,o).rank-fit(a,o).rank||b.w*b.h-a.w*a.h,
+  const words=opts().q.toLowerCase().split(/\s+/).filter(Boolean);
+  const inTitle=it=>words.length&&words.every(w=>String(it.title).toLowerCase().includes(w))?0:1;
+  const by={best:(a,b)=>inTitle(a)-inTitle(b)||a.srank-b.srank||fit(b,o).rank-fit(a,o).rank,
+    res:(a,b)=>fit(b,o).rank-fit(a,o).rank||b.w*b.h-a.w*a.h,
     early:(a,b)=>yr(a,1)-yr(b,1),late:(a,b)=>yr(b,-1)-yr(a,-1),
     title:(a,b)=>String(a.title).localeCompare(String(b.title)),
     mp:(a,b)=>b.w*b.h-a.w*a.h}[view.sort];
@@ -577,7 +584,7 @@ async function sourceLoop(k,id,o){
     try{
       const r=await adapters[k](o,s.page,false,s);if(id!==runId)return;
       s.page++;s.more=!!r.more;
-      for(const it of r.items){if(seen.has(it.id))continue;seen.add(it.id);results.push(it);}
+      for(const it of r.items){if(seen.has(it.id))continue;seen.add(it.id);it.srank=s.count=(s.count||0)+1;results.push(it);}
     }catch(e){if(id!==runId)return;s.err=e.message||"network";s.more=false;}
     s.busy=false;scheduleRender();
   }
@@ -602,6 +609,7 @@ function run(){
 $("f").addEventListener("submit",e=>{e.preventDefault();run()});
 $("more").onclick=()=>{view.limit+=PAGE;rerender();topUp();};
 $("sort").onchange=()=>{view.sort=$("sort").value;rerender()};
+$("artonly").onclick=()=>{view.art=!view.art;$("artonly").classList.toggle("on",view.art);view.limit=PAGE;rerender();topUp();};
 $("mins").querySelectorAll("button").forEach(b=>b.onclick=()=>{view.min=b.dataset.m;view.limit=PAGE;
   $("mins").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));rerender();topUp();});
 $("orients").querySelectorAll("button").forEach(b=>b.onclick=()=>{view.orient=b.dataset.o;view.limit=PAGE;

@@ -25,6 +25,8 @@ A static site (GitHub Pages) that searches open-access museum collections and sh
 - Results show 12 at a time ("Load 12 more"); each source pages independently and stops once enough results are buffered.
 - Post-search filters: clickable source chips (multi-select), sort (print quality / pixels / earliest / latest / title), shape (portrait / landscape / square).
 - Print maths in `fit()`: for every A size in `PAPER`, "contain" (whole image with margins) dpi = max(long/paperLong, short/paperShort); "cover" (fill sheet) = min(...). `maxA` = largest size still ≥ chosen dpi; anything below A4 is dropped. There's no paper selector any more. Post-search "A3+ / A2+ / A1+ / A0+" chips filter by `maxA`, and "Largest print size" sort uses it too.
+- Default sort **Best match**: results whose title contains every keyword first, then each source's own relevance order (`it.srank`, so sources interleave), then max A size.
+- **Artworks only** chip (on by default) hides items whose *medium / object-type text* matches `JUNK` (ceramics, jade, metalwork, sculpture, furniture, costume, coins…). Titles are deliberately not checked ("Vase of Flowers" is usually a painting). Getty's medium is filled from its SPARQL object types (e.g. "Decorative Arts", "Photographs") for this. Europeana and Wikimedia carry no object type, so nothing is filtered there.
 - Shortlist stored in localStorage, CSV export.
 
 ## Known gaps / ideas
