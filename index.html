@@ -85,7 +85,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 14 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
+  <p class="sub">Searches 15 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -129,10 +129,10 @@ td:first-child{color:var(--muted);width:42%}
 const PAPER={A4:[210,297],A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189],"2A0":[1189,1682],"4A0":[1682,2378]}; // mm short,long
 const SIZES=Object.keys(PAPER); // smallest first; results must reach at least A4
 const MED={
-  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",mia:"Paintings",wellcome:"Paintings,Oil paintings,Watercolor painting,Gouaches",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
-  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",mia:"Drawings",wellcome:"Drawings,Ink drawings,Chalk drawings,Sketches,Watercolor painting,Gouaches",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
-  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",mia:"Prints",wellcome:"Prints,Engraving and Engravings,Etching,Lithography,Wood engravings,Woodcuts,Stipple engraving,Intaglio prints,Aquatint,Chromolithography,Portrait prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
-  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",mia:"Photographs",wellcome:"Photographs,Photographic prints,Portrait photographs,Albumen prints,Gelatin silver prints",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
+  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",loc:"paintings",mia:"Paintings",wellcome:"Paintings,Oil paintings,Watercolor painting,Gouaches",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
+  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",loc:"drawings",mia:"Drawings",wellcome:"Drawings,Ink drawings,Chalk drawings,Sketches,Watercolor painting,Gouaches",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
+  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",loc:"",mia:"Prints",wellcome:"Prints,Engraving and Engravings,Etching,Lithography,Wood engravings,Woodcuts,Stipple engraving,Intaglio prints,Aquatint,Chromolithography,Portrait prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
+  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",loc:"",mia:"Photographs",wellcome:"Photographs,Photographic prints,Portrait photographs,Albumen prints,Gelatin silver prints",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
 };
 const SOURCES=[
   {key:"rijks",name:"Rijksmuseum",cc0:true},
@@ -142,6 +142,7 @@ const SOURCES=[
   {key:"met",name:"The Met (New York)",cc0:true},
   {key:"getty",name:"Getty Museum (Los Angeles)",cc0:true},
   {key:"si",name:"Smithsonian (19 museums)",cc0:true},
+  {key:"loc",name:"Library of Congress",cc0:true},
   {key:"mia",name:"Minneapolis Institute of Art",cc0:true},
   {key:"wellcome",name:"Wellcome Collection",cc0:true},
   {key:"ycba",name:"Yale Center for British Art",cc0:true},
@@ -518,6 +519,53 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
         download:iiif+"/full/full/0/default.jpg",licence:loc.license.id==="pdm"?"Public domain mark":"CC0",licOk:true,clientEra:year!=null};
     })).filter(Boolean);
     return {items,more:page+1<(d.totalPages||0)};
+  },
+
+  /* Library of Congress: search results carry the rights statement; pixel size comes from the IIIF info.json of the master file (1 request per item) */
+  async loc(o,page){
+    const maps=!o.medium&&/\bmaps?\b/i.test(o.q);
+    const fa=["online-format:image","access-restricted:false"];
+    if(o.medium&&MED[o.medium].loc)fa.push("subject:"+MED[o.medium].loc);
+    const p=new URLSearchParams({fo:"json",c:"25",sp:String(page+1),fa:fa.join("|")});
+    if(o.q)p.set("q",o.q);
+    if(o.from!=null||o.to!=null)p.set("dates",(o.from??0)+"/"+(o.to??2100));
+    const d=await getJSON(`https://www.loc.gov/${maps?"maps":"photos"}/?`+p,30000);
+    const T="https://tile.loc.gov/image-services/iiif/";
+    const kind=g=>/photomechan|lithog|engrav|etching|woodcut|poster|chromo|mezzotint|aquatint|serigraph|screen ?print|halftone/i.test(g)?"Print":
+      /photo|negative|daguerre|ambrotype|tintype|stereograph|albumen|gelatin|cyanotype|transparenc|slide/i.test(g)?"Photograph":
+      /drawing|watercol|sketch|gouache|pastel|charcoal|pencil|chalk/i.test(g)?"Drawing":/painting/i.test(g)?"Painting":
+      /\bmaps?\b|atlas/i.test(g)?"Map":/print|label|cartoon|broadside/i.test(g)?"Print":"";
+    const items=(await pool(d.results||[],6,async r=>{
+      const it=typeof r.item==="object"&&r.item||{};
+      if(r.access_restricted||!r.url)return null;
+      const imgs=arr(r.image_url).map(u=>u.split("#")[0]);
+      const gmd=imgs.some(u=>/[/:]gmd[/:]/.test(u));
+      // rights: keep only "No known restrictions on publication/use…" or "public domain"; Geography & Map items with no advisory are free to use per LoC policy
+      const rt=[...arr(it.rights_advisory),...arr(it.rights_information),...arr(it.rights)].map(strip).join(" ").trim();
+      const ok=rt?/^(no known restrictions on (publication|use|reproduction)|public domain)/i.test(rt)&&!/may be restricted|restricted by copyright|not evaluated|permission/i.test(rt):gmd;
+      if(!ok)return null;
+      let iiif=(imgs.find(u=>u.startsWith(T))||"").split("/full/")[0]||null,info=null,svc=imgs.filter(u=>/storage-services\/service\/pnp\/.+\.jpg$/.test(u)&&!/_150px/.test(u));
+      if(!iiif){const m=(svc[0]||"").match(/storage-services\/service\/(pnp\/.+\/[a-z0-9]+?)(?:[a-z]|_\d+px)?\.jpg$/);if(m)iiif=T+"master:"+m[1].replace(/\//g,":")+"u";}
+      if(iiif)info=await getJSON(iiif+"/info.json",15000).catch(()=>null);
+      if(!info){ // master name not guessable: read the item's file list
+        const j=await getJSON(r.url.replace(/^http:/,"https:")+"?fo=json");
+        const f=arr(j.resources?.[0]?.files?.[0]);const tif=f.find(x=>/\.(tif|jp2)$/.test(x.url||""));
+        iiif=tif&&(tif.info?tif.info.replace(/\/info\.json$/,""):T+tif.url.split("storage-services/")[1].replace(/\.\w+$/,"").replace(/\//g,":"));
+        if(!iiif)return null;info=await getJSON(iiif+"/info.json",15000);
+      }
+      const w=+info.width,h=+info.height;if(!(w>0&&h>0))return null;
+      const g=[...arr(it.genre),...arr(it.formats).map(x=>x.title||x),...arr(r.original_format)].filter(Boolean).join(" · ");
+      const k=gmd?"Map":kind([...arr(it.genre),...arr(it.formats).map(x=>x.title||x)].join(" "));
+      if(o.medium&&k.toLowerCase()!==o.medium)return null;
+      const big=svc.length?svc[svc.length-1]:null,small=svc.find(u=>/r\.jpg$/.test(u))||big;
+      const id=String(r.id||r.url).replace(/\/$/,"").split("/").pop();
+      return {id:"loc-"+id,src:"loc",title:r.title||it.title||"Untitled",
+        artist:(it.creators?.[0]?.title||arr(it.contributors)[0]||arr(r.contributor)[0]||"").replace(/[,.]?\s*(photographer|artist|publisher|printer|lithographer|engraver|cartographer|creator|draftsman|designer|illustrator|author)[.,]?\s*$/i,""),
+        year:yearOf(arr(r.dates)[0]||r.date),date:it.date||it.created_published_date||arr(r.dates)[0]||"",medium:[k,g].filter(Boolean).join(" · "),w,h,
+        thumb:small||iiif+"/full/400,/0/default.jpg",preview:big||iiif+"/full/!1200,1200/0/default.jpg",iiif,
+        page:r.url.replace(/^http:/,"https:"),download:iiif+"/full/full/0/default.jpg",licence:rt?rt.split(/(?<=\.)\s/)[0]:"No known restrictions (LoC Geography & Map policy)",licOk:true,clientEra:true};
+    })).filter(Boolean);
+    return {items,more:!!d.pagination?.next};
   },
 
   /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
