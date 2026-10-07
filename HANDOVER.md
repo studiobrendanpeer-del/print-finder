@@ -25,7 +25,7 @@ A static site (GitHub Pages) that searches open-access museum collections and sh
 | wm | Wikimedia Commons | Licence tags unreliable — only PD/CC0-labelled kept, flagged "licence varies". |
 
 ## UI behaviour
-- Results show 12 at a time ("Load 12 more"); each source pages independently and stops once enough results are buffered.
+- Infinite scroll: 48 cards at a time; an IntersectionObserver on `#more` plus `maybeMore()` (re-checked after every render) adds cards and asks sources for more when the bottom is within 1,200 px. `lastFetchAt` stops auto-fetching after a round that found nothing new (then `#more` offers a click to search deeper). Cards are cached in `cardCache` (keyed by id+dpi+mode) so images don't reload on re-render.
 - Post-search filters: clickable source chips (multi-select), sort (print quality / pixels / earliest / latest / title), shape (portrait / landscape / square).
 - Print maths in `fit()`: for every A size in `PAPER`, "contain" (whole image with margins) dpi = max(long/paperLong, short/paperShort); "cover" (fill sheet) = min(...). `maxA` = largest size still ≥ chosen dpi; anything below A4 is dropped. There's no paper selector any more. Post-search "A3+ / A2+ / A1+ / A0+" chips filter by `maxA`, and "Largest print size" sort uses it too.
 - Default sort **Best match**: results whose title contains every keyword first, then each source's own relevance order (`it.srank`, so sources interleave), then max A size.

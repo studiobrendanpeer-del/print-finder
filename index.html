@@ -117,7 +117,7 @@ td:first-child{color:var(--muted);width:42%}
 </div>
 <div class="grid" id="grid"></div>
 <div class="empty" id="empty" hidden></div>
-<button class="btn ghost" id="more" hidden>Search deeper</button>
+<div class="empty" id="more" hidden></div>
 </div>
 <button class="btn" id="shortlist">Shortlist (0)</button>
 
@@ -621,7 +621,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
 };
 
 /* ---------- search engine ---------- */
-const PAGE=12;
+const PAGE=48; // cards added each time the viewer scrolls near the bottom
 let results=[],seen=new Set(),state={},runId=0;
 let view={src:new Set(),orient:"",min:"",art:true,sort:"best",limit:PAGE};
 function keep(it,o){
@@ -693,14 +693,26 @@ function run(){
   const o=opts();store.set("pf_form",{q:o.q,medium:o.medium,from:$("from").value,to:$("to").value,dpi:String(o.dpi),mode:o.mode,lic:$("lic").value,eukey:$("eukey").value,sikey:$("sikey").value});
   showNeed();runId++;results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;
   o.srcs.forEach(k=>state[k]={page:0,more:true,rounds:0});
-  $("grid").innerHTML="";$("more").hidden=true;$("tools").hidden=false;
+  $("grid").innerHTML="";$("more").hidden=true;cardCache.clear();lastFetchAt=-1;$("tools").hidden=false;
   if(!o.srcs.length){$("empty").hidden=false;$("empty").textContent="Pick at least one source.";return;}
   rerender();
   o.srcs.forEach(k=>sourceLoop(k,runId,o));
 }
 $("srcs").addEventListener("change",()=>store.set("pf_off",[...$("srcs").querySelectorAll("input:not(:checked)")].map(i=>i.value)));
 $("f").addEventListener("submit",e=>{e.preventDefault();run()});
-$("more").onclick=()=>{view.limit+=PAGE;rerender();topUp();};
+/* infinite scroll: when the bottom of the grid comes into view, show more cards and let sources fetch further */
+let lastFetchAt=-1; // results.length when sources were last asked for more; stops auto-fetch when a round finds nothing new
+function maybeMore(force){
+  const m=$("more");if(m.hidden||!results.length)return;
+  if(m.getBoundingClientRect().top>innerHeight+1200)return; // bottom not near the screen
+  const o=opts(),list=visible(o);
+  if(list.length>view.limit){view.limit+=PAGE;scheduleRender();return;}
+  const busy=o.srcs.some(k=>state[k]?.busy),canFetch=o.srcs.some(k=>state[k]?.more&&!state[k]?.err);
+  if(busy||!canFetch||(!force&&results.length===lastFetchAt))return;
+  lastFetchAt=results.length;view.limit+=PAGE;topUp();
+}
+new IntersectionObserver(es=>{if(es[0].isIntersecting)maybeMore()},{rootMargin:"1200px"}).observe($("more"));
+$("more").onclick=()=>maybeMore(true);
 $("sort").onchange=()=>{view.sort=$("sort").value;rerender()};
 $("artonly").onclick=()=>{view.art=!view.art;$("artonly").classList.toggle("on",view.art);view.limit=PAGE;rerender();topUp();};
 $("mins").querySelectorAll("button").forEach(b=>b.onclick=()=>{view.min=b.dataset.m;view.limit=PAGE;
@@ -738,12 +750,15 @@ function rerender(){
   const o=opts();const g=$("grid");
   const list=visible(o),shown=list.slice(0,view.limit);
   const frag=document.createDocumentFragment();
-  shown.forEach(it=>frag.appendChild(card(it,o)));
+  // reuse built cards so images don't reload on every update; a card depends on dpi/mode via its size badge
+  shown.forEach(it=>{const k=it.id+"|"+o.dpi+"|"+o.mode;let c=cardCache.get(k);if(!c){c=card(it,o);cardCache.set(k,c);}frag.appendChild(c);});
   g.replaceChildren(frag);
   const busy=o.srcs.some(k=>state[k]?.busy), canFetch=o.srcs.some(k=>state[k]?.more&&!state[k]?.err);
-  $("more").hidden=!(list.length>view.limit||canFetch);
-  $("more").textContent=list.length>view.limit?`Load ${Math.min(PAGE,list.length-view.limit)} more`:busy?"Searching…":"Search deeper";
-  $("more").disabled=list.length<=view.limit&&busy;
+  $("more").hidden=!shown.length;
+  const stalled=!busy&&canFetch&&list.length<=view.limit&&results.length===lastFetchAt;
+  $("more").textContent=list.length>view.limit||busy?"Loading more…":stalled?"No new matches in the last batch — click to search deeper":canFetch?"Scroll for more":`All ${list.length.toLocaleString()} results shown`;
+  $("more").style.cursor=stalled?"pointer":"";
+  requestAnimationFrame(()=>maybeMore());
   $("empty").hidden=shown.length>0;
   if(!shown.length)$("empty").textContent=busy||!results.length&&canFetch?"Searching…":"Nothing printable here. Try a lower DPI, a smaller minimum size, broader keywords or another source.";
   statusLine();
