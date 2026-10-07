@@ -85,7 +85,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 13 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
+  <p class="sub">Searches 14 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -129,10 +129,10 @@ td:first-child{color:var(--muted);width:42%}
 const PAPER={A4:[210,297],A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189],"2A0":[1189,1682],"4A0":[1682,2378]}; // mm short,long
 const SIZES=Object.keys(PAPER); // smallest first; results must reach at least A4
 const MED={
-  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",mia:"Paintings",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
-  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",mia:"Drawings",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
-  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",mia:"Prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
-  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",mia:"Photographs",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
+  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",mia:"Paintings",wellcome:"Paintings,Oil paintings,Watercolor painting,Gouaches",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
+  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",mia:"Drawings",wellcome:"Drawings,Ink drawings,Chalk drawings,Sketches,Watercolor painting,Gouaches",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
+  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",mia:"Prints",wellcome:"Prints,Engraving and Engravings,Etching,Lithography,Wood engravings,Woodcuts,Stipple engraving,Intaglio prints,Aquatint,Chromolithography,Portrait prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
+  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",mia:"Photographs",wellcome:"Photographs,Photographic prints,Portrait photographs,Albumen prints,Gelatin silver prints",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
 };
 const SOURCES=[
   {key:"rijks",name:"Rijksmuseum",cc0:true},
@@ -143,6 +143,7 @@ const SOURCES=[
   {key:"getty",name:"Getty Museum (Los Angeles)",cc0:true},
   {key:"si",name:"Smithsonian (19 museums)",cc0:true},
   {key:"mia",name:"Minneapolis Institute of Art",cc0:true},
+  {key:"wellcome",name:"Wellcome Collection",cc0:true},
   {key:"ycba",name:"Yale Center for British Art",cc0:true},
   {key:"yuag",name:"Yale University Art Gallery",cc0:true},
   {key:"smk",name:"SMK (Denmark)",cc0:true},
@@ -493,6 +494,30 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
         thumb:img+"400.jpg",preview:img+"800.jpg",page:"https://collections.artsmia.org/art/"+a.id,download:img+"full.jpg",licence:"Public domain",licOk:true,clientEra:true};
     });
     return {items,more:(page+1)*100<Math.min(d.hits?.total?.value||0,10000)};
+  },
+
+  /* Wellcome Collection: image search filtered to PDM/CC0 → IIIF info.json for full pixel size + parent work for date and format */
+  async wellcome(o,page){
+    const p=new URLSearchParams({"locations.license":"pdm,cc-0",pageSize:"24",page:String(page+1),include:"source.contributors,source.genres"});
+    if(o.q)p.set("query",o.q);
+    if(o.medium)p.set("source.genres.label",MED[o.medium].wellcome);
+    if(o.from!=null)p.set("source.production.dates.from",o.from+"-01-01");
+    if(o.to!=null)p.set("source.production.dates.to",o.to+"-12-31");
+    const d=await getJSON("https://api.wellcomecollection.org/catalogue/v2/images?"+p);
+    const works={},work=id=>works[id]||(works[id]=getJSON(`https://api.wellcomecollection.org/catalogue/v2/works/${id}?include=production`).catch(()=>({})));
+    const items=(await pool(arr(d.results),6,async im=>{
+      const loc=arr(im.locations).find(l=>/^(pdm|cc-0)$/.test(l.license?.id)&&/info\.json$/.test(l.url||""));if(!loc)return null;
+      const iiif=loc.url.replace(/\/info\.json$/,""),th=iiif.replace("/image/","/thumbs/"),s=im.source||{};
+      const [inf,w]=await Promise.all([getJSON(loc.url),work(s.id)]);
+      if(!(inf.width>0))return null;
+      const date=arr(w.production).flatMap(x=>arr(x.dates)).map(x=>x.label).find(Boolean)||"",year=yearOf(date);
+      const cs=arr(s.contributors),ag=(cs.some(c=>c.primary)?cs.filter(c=>c.primary):cs).map(c=>c.agent?.label).filter(Boolean);
+      return {id:"wellcome-"+im.id,src:"wellcome",title:(s.title||"Untitled").replace(/[\s.\/:;]+$/,""),artist:ag.slice(0,2).join(", "),year,date,
+        medium:[w.workType?.label,...arr(s.genres).map(g=>g.label),w.physicalDescription].filter(Boolean).join(" · "),w:+inf.width,h:+inf.height,
+        thumb:th+"/full/!400,400/0/default.jpg",preview:th+"/full/!1024,1024/0/default.jpg",iiif,page:"https://wellcomecollection.org/works/"+s.id,
+        download:iiif+"/full/full/0/default.jpg",licence:loc.license.id==="pdm"?"Public domain mark":"CC0",licOk:true,clientEra:year!=null};
+    })).filter(Boolean);
+    return {items,more:page+1<(d.totalPages||0)};
   },
 
   /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
