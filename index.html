@@ -7,134 +7,143 @@
 <style>
 :root{
   --bg:#f6f4ef;--panel:#fffdf8;--ink:#1d1b18;--muted:#6f6a61;--line:#e3ded3;
-  --accent:#2f5d50;--accent-ink:#fff;--ok:#2f7a4a;--ok-bg:#e3f1e7;--warn:#9a6a00;--warn-bg:#fbf0d6;
-  --bad:#a33b2b;--bad-bg:#f7e1dc;--chip:#efebe2;
+  --accent:#2f5d50;--accent-ink:#fff;--ok:#2f7a4a;--ok-bg:#e3f1e7;--warn:#855b00;--warn-bg:#fbf0d6;
+  --bad:#a33b2b;--bad-bg:#f7e1dc;--chip:#efebe2;--gold:#a87400;
+  color-scheme:light;accent-color:var(--accent);
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#151413;--panel:#1d1c1a;--ink:#ece8df;--muted:#a19b90;--line:#33302b;
   --accent:#7fb8a5;--accent-ink:#10201b;--ok:#86cf9e;--ok-bg:#1f3326;--warn:#e7c06b;--warn-bg:#382e17;
-  --bad:#ef9a8a;--bad-bg:#3a201b;--chip:#2a2825;}}
+  --bad:#ef9a8a;--bad-bg:#3a201b;--chip:#2a2825;--gold:#e3b04b;
+  color-scheme:dark;}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 header{padding:20px 20px 0;max-width:1400px;margin:0 auto}
 h1{font:600 22px/1.2 Georgia,"Times New Roman",serif;margin:0 0 4px}
 .sub{color:var(--muted);font-size:13px;margin:0 0 16px}
-.wrap{max-width:1400px;margin:0 auto;padding:0 20px 60px}
+.wrap{max-width:1400px;margin:0 auto;padding:0 20px 90px} /* bottom room so the floating Boards button doesn't cover the last row */
 form{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:14px}
 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
 label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em}
 input,select,button{font:inherit;color:var(--ink)}
-input[type=text],input[type=number],select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:38px}
+input[type=text],input[type=number],select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:38px;font-size:15px;font-weight:400;letter-spacing:0}
+@media (max-width:760px){input[type=text],input[type=number],select{font-size:16px}} /* under 16px, iPhones zoom into the page on focus */
 #q{width:min(420px,100%)}
 input[type=number]{width:96px}
 .btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:9px 18px;font-weight:600;cursor:pointer;min-height:38px}
 .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
-.btn:disabled{opacity:.5;cursor:default}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{background:var(--chip);border:1px solid transparent;border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer}
-.chip:hover{border-color:var(--line)}
-.srcs{display:flex;flex-wrap:wrap;gap:14px;font-size:13px}
+.chip{background:var(--chip);border:1px solid transparent;border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;white-space:nowrap}
+.chip:hover{border-color:var(--muted)}
+.srcbox>summary,.settings>summary{cursor:pointer;font-size:13px;font-weight:600;width:max-content}
+.srcs{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;margin-top:10px}
 .srcs label{display:flex;align-items:center;gap:6px;color:var(--ink);font-weight:500;letter-spacing:0}
+.settings{font-size:12px;color:var(--muted)}
 .need{font-size:13px;color:var(--muted)}
 .need b{color:var(--ink)}
-#status{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 10px;font-size:13px;color:var(--muted);align-items:center}
+#status{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 10px;font-size:13px;color:var(--muted);align-items:center;scroll-margin-top:12px}
 .st{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
 .st.err{color:var(--bad);border-color:var(--bad)}
-button.st{font:inherit;font-size:13px;color:var(--ink);cursor:pointer}
+button.st{font-size:13px;cursor:pointer}
 button.st:hover{border-color:var(--muted)}
 .st.on,.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 #tools .chips{align-self:end}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,calc(50% - 7px)),1fr));gap:14px} /* two columns on phones */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer}
-.card:hover{border-color:var(--muted)}
+.card:hover,.card:focus-within{border-color:var(--muted)}
 .thumb{aspect-ratio:1/1;background:var(--chip);display:flex;align-items:center;justify-content:center;overflow:hidden}
-.nothumb{color:var(--muted);font-size:12px;padding:16px;text-align:center}
+.thumb:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .thumb img{max-width:100%;max-height:100%;object-fit:contain}
-.maxa{padding:8px 12px 0;font:600 17px/1.2 Georgia,"Times New Roman",serif;display:flex;align-items:baseline;gap:8px}
+.nothumb{color:var(--muted);font-size:12px;padding:16px;text-align:center}
+.maxa{padding:8px 12px 0;font:600 17px/1.2 Georgia,"Times New Roman",serif;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px}
 .maxa span{font:12px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--muted)}
-.meta{padding:6px 12px 12px;display:grid;gap:6px;font-size:13px}
+.meta{padding:6px 12px 12px;display:grid;gap:6px;font-size:13px;flex:1;align-content:start}
 .t{font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .a{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badges{display:flex;flex-wrap:wrap;gap:4px}
 .b{font-size:11px;font-weight:600;border-radius:5px;padding:2px 6px;background:var(--chip);color:var(--muted)}
 .b.ok{background:var(--ok-bg);color:var(--ok)}.b.warn{background:var(--warn-bg);color:var(--warn)}.b.bad{background:var(--bad-bg);color:var(--bad)}
-.sim{float:right;background:none;border:1px solid var(--line);border-radius:999px;font-size:11px;cursor:pointer;color:var(--muted);padding:1px 7px;margin-left:6px}
-.sim:hover{color:var(--ink);border-color:var(--muted)}
-.star{float:right;background:none;border:0;font-size:18px;cursor:pointer;color:var(--muted);line-height:1;padding:0 0 0 6px}
-.star.on{color:#d39b1b}
-#more{display:block;margin:20px auto}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.acts button{background:none;border:1px solid var(--line);border-radius:999px;font-size:12px;cursor:pointer;color:var(--muted);padding:0 11px;min-height:30px}
+.acts button:hover{color:var(--ink);border-color:var(--muted)}
+.acts .star.on{color:var(--gold);border-color:var(--gold)}
 .empty{color:var(--muted);text-align:center;padding:40px 0}
+.more{color:var(--muted);text-align:center;padding:24px 0 8px;display:grid;justify-items:center;gap:10px}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;width:min(1000px,94vw);max-height:92vh}
 dialog::backdrop{background:rgba(0,0,0,.55)}
-.dlg{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:0}
-@media (max-width:760px){.dlg{grid-template-columns:1fr}}
+.x{position:sticky;top:8px;float:right;margin:8px 8px -40px 0;background:var(--panel);border:1px solid var(--line);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:16px;z-index:2} /* stays reachable while a long dialog scrolls */
+.dlg{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
 .dimg{background:var(--chip);display:flex;align-items:center;justify-content:center;min-height:300px;max-height:80vh}
 .dimg img{max-width:100%;max-height:80vh;object-fit:contain}
 .dinfo{padding:18px;display:grid;gap:10px;align-content:start;font-size:14px;overflow:auto;max-height:86vh}
-.dinfo h2{font:600 19px/1.25 Georgia,serif;margin:0}
+.dinfo>*{min-width:0} /* the 100% crop is wider than the column: it scrolls inside its box instead of stretching the panel */
+.dinfo h2{font:600 19px/1.25 Georgia,serif;margin:0;padding-right:36px}
+@media (max-width:900px){.dlg{grid-template-columns:1fr}.dimg{min-height:200px;max-height:60vh}.dimg img{max-height:60vh}.dinfo{max-height:none;overflow:visible}}
 table{border-collapse:collapse;font-size:13px;width:100%}
 td{padding:4px 0;border-bottom:1px solid var(--line);vertical-align:top}
-td:first-child{color:var(--muted);width:42%}
+td:first-child{color:var(--muted);width:42%;padding-right:8px}
+.dpis{display:flex;flex-wrap:wrap;gap:4px 10px}
+.dpis>span{white-space:nowrap}
 .links{display:flex;flex-wrap:wrap;gap:8px}
 .links a{color:var(--accent);font-weight:600;font-size:13px}
-.crop{width:100%;height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--chip);position:relative}
+.crop{width:100%;height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--chip)}
 .crop img{max-width:none;max-height:none;display:block}
 .note{font-size:12px;color:var(--muted)}
-#shortlist{position:fixed;right:16px;bottom:16px}
-#bpop{position:fixed;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;width:260px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:grid;gap:8px;font-size:14px}
-#bpop label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);font-weight:400;letter-spacing:0;cursor:pointer}
-#bpop .new{display:flex;gap:6px}#bpop .new input{flex:1;min-width:0}
+#boardsbtn{position:fixed;right:16px;bottom:16px}
+#bpop{position:fixed;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;width:260px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.25);display:grid;gap:8px;font-size:14px}
+#bpop label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);font-weight:400;letter-spacing:0;cursor:pointer;min-height:28px}
+.new{display:flex;flex-wrap:wrap;gap:6px}.new input{flex:1;width:0;min-width:120px}
 .bpills{display:flex;flex-wrap:wrap;gap:6px}
 .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.bitem{border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:12px;display:grid}
+.bitem{border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:12px;display:grid;align-content:start}
 .bitem img{width:100%;aspect-ratio:1/1;object-fit:contain;background:var(--chip)}
 .bitem div{padding:6px 8px;display:grid;gap:2px}
 .bitem a{color:var(--accent)}
-.x{position:absolute;right:10px;top:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:16px;z-index:2}
 </style>
 </head>
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 15 open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
+  <p class="sub">Searches <span id="nsrc"></span> open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
 </header>
 <div class="wrap">
 <form id="f">
   <div class="row">
-    <label>Theme / keywords<input id="q" type="text" placeholder="e.g. botanical, birds, map, woodblock" value="botanical"></label>
+    <label>Theme / keywords<input id="q" type="text" placeholder="one or two words, e.g. iris" value="botanical"></label>
     <label>Medium<select id="medium">
       <option value="">Any</option><option value="painting">Painting</option><option value="drawing">Drawing / watercolour</option>
       <option value="print">Print (engraving, woodcut, litho)</option><option value="photograph">Photograph</option></select></label>
-    <label>From year<input id="from" type="number" placeholder="1500"></label>
-    <label>To year<input id="to" type="number" placeholder="1900"></label>
+    <label>From year<input id="from" type="number" placeholder="any"></label>
+    <label>To year<input id="to" type="number" placeholder="any"></label>
   </div>
   <div class="row">
     <label>Min DPI<select id="dpi"><option value="300">300 (gallery)</option><option value="240">240</option><option value="200" selected>200 (normal viewing)</option><option value="150">150 (bare minimum)</option></select></label>
     <label>Layout<select id="mode"><option value="contain">Whole image, with margins</option><option value="cover">Fill the sheet (crop)</option></select></label>
-    <label>Licence<select id="lic"><option value="strict">CC0 museums only</option><option value="all" selected>Include Wikimedia (check licence)</option></select></label>
+    <label>Licence<select id="lic"><option value="strict">Public-domain sources only</option><option value="all" selected>Include Wikimedia (check licence)</option></select></label>
     <button class="btn" type="submit" id="go">Search</button>
   </div>
-  <div class="srcs" id="srcs"></div>
-  <details class="note"><summary>Settings</summary><div class="row" style="margin-top:8px"><label>Europeana key — only needed if Europeana starts failing (free from pro.europeana.eu)<input id="eukey" type="text" value="api2demo" style="width:220px"></label><label>Smithsonian key — the shared DEMO_KEY allows ~10 searches an hour (free key: api.data.gov/signup)<input id="sikey" type="text" value="DEMO_KEY" style="width:220px"></label><button class="btn ghost" type="button" id="selftest">Test all sources</button></div></details>
+  <details class="srcbox" id="srcbox"><summary id="srcsum">Sources</summary><div class="srcs" id="srcs"></div></details>
+  <details class="settings"><summary>Settings</summary><div class="row" style="margin-top:8px"><label>Europeana key — only needed if Europeana starts failing (free from pro.europeana.eu)<input id="eukey" type="text" value="api2demo" style="width:220px"></label><label>Smithsonian key — the shared DEMO_KEY allows ~10 searches an hour (free key: api.data.gov/signup)<input id="sikey" type="text" value="DEMO_KEY" style="width:220px"></label><button class="btn ghost" type="button" id="selftest">Test all sources</button></div></details>
   <div class="need" id="need"></div>
 </form>
 <div id="status"></div>
 <div class="row" id="tools" hidden style="margin:0 0 14px">
   <label>Sort<select id="sort"><option value="best">Best match</option><option value="res">Largest print size</option><option value="mp">Most pixels</option><option value="early">Earliest first</option><option value="late">Latest first</option><option value="title">Title A–Z</option></select></label>
-  <div class="chips" id="orients"><button type="button" class="chip on" data-o="">Any shape</button><button type="button" class="chip" data-o="portrait">Portrait</button><button type="button" class="chip" data-o="landscape">Landscape</button><button type="button" class="chip" data-o="square">Square-ish</button></div>
-  <div class="chips"><button type="button" class="chip on" id="artonly" title="Hides ceramics, sculpture, furniture, costume, coins and other 3-D objects">Artworks only</button></div>
-  <div class="chips" id="mins"><button type="button" class="chip on" data-m="">Any size (A4+)</button><button type="button" class="chip" data-m="A3">A3+</button><button type="button" class="chip" data-m="A2">A2+</button><button type="button" class="chip" data-m="A1">A1+</button><button type="button" class="chip" data-m="A0">A0+</button></div>
+  <div class="chips" id="orients" role="group" aria-label="Shape"><button type="button" class="chip on" aria-pressed="true" data-v="">Any shape</button><button type="button" class="chip" aria-pressed="false" data-v="portrait">Portrait</button><button type="button" class="chip" aria-pressed="false" data-v="landscape">Landscape</button><button type="button" class="chip" aria-pressed="false" data-v="square">Square-ish</button></div>
+  <div class="chips"><button type="button" class="chip on" aria-pressed="true" id="artonly" title="Hides ceramics, sculpture, furniture, costume, coins and other 3-D objects">Artworks only</button></div>
+  <div class="chips" id="mins" role="group" aria-label="Minimum print size"><button type="button" class="chip on" aria-pressed="true" data-v="">Any size (A4+)</button><button type="button" class="chip" aria-pressed="false" data-v="A3">A3+</button><button type="button" class="chip" aria-pressed="false" data-v="A2">A2+</button><button type="button" class="chip" aria-pressed="false" data-v="A1">A1+</button><button type="button" class="chip" aria-pressed="false" data-v="A0">A0+</button></div>
 </div>
 <div class="grid" id="grid"></div>
-<div class="empty" id="empty" hidden></div>
-<div class="empty" id="more" hidden></div>
+<div class="empty" id="empty">Press Search to find printable images.</div>
+<div class="more" id="more" hidden><span id="moretxt"></span><button class="btn ghost" type="button" id="deeper" hidden>Search deeper</button></div>
 </div>
-<button class="btn" id="shortlist">Boards</button>
-<div id="bpop" hidden></div>
+<button class="btn" id="boardsbtn" type="button">Boards</button>
+<div id="bpop" role="dialog" aria-label="Save to board" hidden></div>
 
-<dialog id="dlg"><button class="x" id="close" aria-label="Close">✕</button><div id="dbody"></div></dialog>
-<dialog id="sdlg"><button class="x" id="sclose" aria-label="Close">✕</button><div class="dinfo" id="sbody"></div></dialog>
+<dialog id="dlg" aria-labelledby="dtitle"><button class="x" id="dclose" type="button" aria-label="Close">✕</button><div id="dbody"></div></dialog>
+<dialog id="panel" aria-labelledby="ptitle"><button class="x" id="pclose" type="button" aria-label="Close">✕</button><div class="dinfo" id="pbody"></div></dialog>
 
 <script>
 "use strict";
@@ -142,28 +151,31 @@ td:first-child{color:var(--muted);width:42%}
 const PAPER={A4:[210,297],A3:[297,420],A2:[420,594],A1:[594,841],A0:[841,1189],"2A0":[1189,1682],"4A0":[1682,2378]}; // mm short,long
 const SIZES=Object.keys(PAPER); // smallest first; results must reach at least A4
 const MED={
-  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",loc:"paintings",mia:"Paintings",wellcome:"Paintings,Oil paintings,Watercolor painting,Gouaches",re:/paint|oil|tempera|maleri|olie/i,kw:"painting"},
-  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",loc:"drawings",mia:"Drawings",wellcome:"Drawings,Ink drawings,Chalk drawings,Sketches,Watercolor painting,Gouaches",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i,kw:"drawing"},
-  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",loc:"",mia:"Prints",wellcome:"Prints,Engraving and Engravings,Etching,Lithography,Wood engravings,Woodcuts,Stipple engraving,Intaglio prints,Aquatint,Chromolithography,Portrait prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i,kw:"print"},
-  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",loc:"",mia:"Photographs",wellcome:"Photographs,Photographic prints,Portrait photographs,Albumen prints,Gelatin silver prints",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i,kw:"photograph"}
+  painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",loc:"paintings",mia:"Paintings",wellcome:"Paintings,Oil paintings,Watercolor painting,Gouaches",re:/paint|oil|tempera|maleri|olie/i},
+  drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",loc:"drawings",mia:"Drawings",wellcome:"Drawings,Ink drawings,Chalk drawings,Sketches,Watercolor painting,Gouaches",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i},
+  print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",loc:"",mia:"Prints",wellcome:"Prints,Engraving and Engravings,Etching,Lithography,Wood engravings,Woodcuts,Stipple engraving,Intaglio prints,Aquatint,Chromolithography,Portrait prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i},
+  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",loc:"",mia:"Photographs",wellcome:"Photographs,Photographic prints,Portrait photographs,Albumen prints,Gelatin silver prints",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i}
 };
+/* vetted: every result is checked for a public-domain / CC0 licence; Wikimedia's licence tags are not reliable */
 const SOURCES=[
-  {key:"rijks",name:"Rijksmuseum",cc0:true},
-  {key:"nga",name:"National Gallery of Art (DC)",cc0:true},
-  {key:"cma",name:"Cleveland Museum of Art",cc0:true},
-  {key:"aic",name:"Art Institute of Chicago",cc0:true},
-  {key:"met",name:"The Met (New York)",cc0:true},
-  {key:"getty",name:"Getty Museum (Los Angeles)",cc0:true},
-  {key:"si",name:"Smithsonian (19 museums)",cc0:true},
-  {key:"loc",name:"Library of Congress",cc0:true},
-  {key:"mia",name:"Minneapolis Institute of Art",cc0:true},
-  {key:"wellcome",name:"Wellcome Collection",cc0:true},
-  {key:"ycba",name:"Yale Center for British Art",cc0:true},
-  {key:"yuag",name:"Yale University Art Gallery",cc0:true},
-  {key:"smk",name:"SMK (Denmark)",cc0:true},
-  {key:"eu",name:"Europeana (300+ European museums)",cc0:true},
-  {key:"wm",name:"Wikimedia Commons",cc0:false}
+  {key:"rijks",name:"Rijksmuseum",vetted:true},
+  {key:"nga",name:"National Gallery of Art (DC)",vetted:true},
+  {key:"cma",name:"Cleveland Museum of Art",vetted:true},
+  {key:"aic",name:"Art Institute of Chicago",vetted:true},
+  {key:"met",name:"The Met (New York)",vetted:true},
+  {key:"getty",name:"Getty Museum (Los Angeles)",vetted:true},
+  {key:"si",name:"Smithsonian (19 museums)",vetted:true},
+  {key:"loc",name:"Library of Congress",vetted:true},
+  {key:"mia",name:"Minneapolis Institute of Art",vetted:true},
+  {key:"wellcome",name:"Wellcome Collection",vetted:true},
+  {key:"ycba",name:"Yale Center for British Art",vetted:true},
+  {key:"yuag",name:"Yale University Art Gallery",vetted:true},
+  {key:"smk",name:"SMK (Denmark)",vetted:true},
+  {key:"eu",name:"Europeana (300+ European museums)",vetted:true},
+  {key:"wm",name:"Wikimedia Commons",vetted:false}
 ];
+const SRC=Object.fromEntries(SOURCES.map(s=>[s.key,s]));
+const shortName=k=>SRC[k].name.replace(/ \(.*\)$/,""); // for pills and cards: "Smithsonian", not "Smithsonian (19 museums)"
 /* Rijksmuseum titles are mostly Dutch: English theme words are also searched as Dutch title words */
 const NL={botanical:["plant","planten","bloem","bloemen","tak"],flower:["bloem","bloemen"],flowers:["bloem","bloemen","bloemstilleven"],
   bird:["vogel","vogels"],birds:["vogel","vogels"],butterfly:["vlinder","vlinders"],butterflies:["vlinder","vlinders"],insect:["insect","insecten"],insects:["insect","insecten"],
@@ -174,38 +186,51 @@ const NL={botanical:["plant","planten","bloem","bloemen","tak"],flower:["bloem",
   tulip:["tulp","tulpen"],rose:["roos","rozen"],horse:["paard","paarden"],dog:["hond"],cat:["kat"],tree:["boom","bomen"],river:["rivier"],city:["stad","stadsgezicht"],
   winter:["winter","ijs"],fish:["vis","vissen"],fruit:["vruchten","fruit"],woman:["vrouw"],cow:["koe","koeien"],lion:["leeuw"],elephant:["olifant"],monkey:["aap"],
   japanese:["Japan","Japanse"],woodblock:["houtsnede"],"japanese woodblock":["Japan","Japanse"],church:["kerk"],castle:["kasteel"],windmill:["molen"],moon:["maan"]};
-const RIJKS_TYPE={painting:"painting",drawing:"drawing",print:"print",photograph:"photograph"};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const strip=s=>{const d=document.createElement("div");d.innerHTML=s||"";return d.textContent.trim();};
+const safeUrl=u=>/^https?:\/\//i.test(u||"")?u:"#"; // links come from museum data and imported backups: web addresses only
+const strip=s=>new DOMParser().parseFromString(String(s??""),"text/html").body.textContent.trim(); // inert parse: nothing in the HTML can run or load
 const yearOf=s=>{const m=String(s??"").match(/(1[0-9]{3}|20[0-2][0-9])/);return m?+m[1]:null;};
+const fmtPx=it=>`${(+it.w||0).toLocaleString()}×${(+it.h||0).toLocaleString()}`;
+const arr=x=>x==null?[]:Array.isArray(x)?x:[x];
+const newId=()=>"b"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const need=dpi=>{const [s,l]=PAPER.A4;return {needS:Math.round(s/25.4*dpi),needL:Math.round(l/25.4*dpi)};}; // px an image needs for A4 at this dpi
 
 /* ---------- storage (per-browser convenience only) ---------- */
-const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
-/* boards: [{id,name,items:[snapshot]}]; the old single shortlist becomes a board called "Shortlist" */
-let boards=store.get("pf_boards",null);
-if(!boards){const old=store.get("pf_shortlist",[]);boards=old.length?[{id:"b"+Date.now(),name:"Shortlist",items:old}]:[];store.set("pf_boards",boards);}
-const saveBoards=()=>store.set("pf_boards",boards);
-const inAnyBoard=id=>boards.some(b=>b.items.some(x=>x.id===id));
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
+/* boards: [{id,name,items:[snapshot]}]; an old single shortlist becomes a board called "Shortlist" */
+function loadBoards(){
+  const b=store.get("pf_boards",null);if(Array.isArray(b))return b;
+  const old=store.get("pf_shortlist",[]),m=Array.isArray(old)&&old.length?[{id:newId(),name:"Shortlist",items:old}]:[];
+  store.set("pf_boards",m);return m;
+}
+let boards=loadBoards(),savedIds=new Set();
+const countSaved=()=>{savedIds=new Set(boards.flatMap(b=>b.items.map(x=>x.id)));};
+function saveBoards(){countSaved();if(!store.set("pf_boards",boards))alert("Couldn't save your boards: this browser's storage is full or blocked.");}
+countSaved();
 
 /* ---------- UI setup ---------- */
 const offSrcs=new Set(store.get("pf_off",[])); // sources the viewer unticked, remembered in this browser
-SOURCES.forEach(s=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" value="${s.key}" ${offSrcs.has(s.key)?"":"checked"}> ${esc(s.name)}${s.cc0?"":" <span class='b warn'>licence varies</span>"}`;$("srcs").appendChild(l)});
+SOURCES.forEach(s=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" value="${s.key}" ${offSrcs.has(s.key)?"":"checked"}> ${esc(s.name)}${s.vetted?"":" <span class='b warn'>licence varies</span>"}`;$("srcs").appendChild(l)});
+$("nsrc").textContent=SOURCES.length;
+const srcSummary=()=>{$("srcsum").textContent=`Sources — ${$("srcs").querySelectorAll("input:checked").length} of ${SOURCES.length} selected`;};
+$("srcs").addEventListener("change",()=>{store.set("pf_off",[...$("srcs").querySelectorAll("input:not(:checked)")].map(i=>i.value));srcSummary();});
+srcSummary();
+$("srcbox").open=innerWidth>=760; // folded on phones, where the list is long
 const saved=store.get("pf_form",null);
 if(saved)for(const[k,v]of Object.entries(saved)){if($(k))$(k).value=v}
 
+/* what the form says right now; a search keeps its own copy (see `searched`) */
 function opts(){
-  const [ps,pl]=PAPER.A4, dpi=+$("dpi").value;
-  const lic=$("lic").value;
-  const srcs=[...$("srcs").querySelectorAll("input:checked")].map(i=>i.value).filter(k=>lic==="all"||k!=="wm");
+  const dpi=+$("dpi").value,lic=$("lic").value;
+  const srcs=[...$("srcs").querySelectorAll("input:checked")].map(i=>i.value).filter(k=>lic==="all"||SRC[k].vetted);
   return {q:$("q").value.trim(),medium:$("medium").value,from:$("from").value?+$("from").value:null,to:$("to").value?+$("to").value:null,
-    dpi,mode:$("mode").value,srcs,
-    needS:Math.round(ps/25.4*dpi),needL:Math.round(pl/25.4*dpi),psIn:ps/25.4,plIn:pl/25.4};
+    dpi,mode:$("mode").value,lic,srcs,...need(dpi)};
 }
 function showNeed(){const o=opts();$("need").innerHTML=o.mode==="contain"
   ?`Shows everything that prints at <b>A4 or larger</b> at ${o.dpi} dpi (at least ${o.needL.toLocaleString()} px on the long side or ${o.needS.toLocaleString()} px on the short side). Each result shows the largest A size it can print.`
   :`Shows everything that fills <b>an A4 sheet or larger</b> at ${o.dpi} dpi (at least ${o.needS.toLocaleString()} × ${o.needL.toLocaleString()} px). Each result shows the largest A size it can fill.`;}
-["dpi","mode"].forEach(id=>$(id).addEventListener("change",()=>{showNeed();if(results.length){view.limit=PAGE;rerender();topUp()}}));
 showNeed();
 
 /* ---------- print maths ---------- */
@@ -218,44 +243,65 @@ function fit(it,o){
   const best=dpis.filter(x=>x.dpi>=o.dpi).pop(); // largest A size that still meets the dpi
   const ar=L/S, par=Math.SQRT2; // every A size has the same √2 shape
   const crop=Math.round((1-Math.min(ar,par)/Math.max(ar,par))*100); // % lost when filling the sheet
-  const maxL=L/o.dpi*2.54, maxS=S/o.dpi*2.54; // cm at chosen dpi
-  return {pass:!!best,maxA:best?.k||null,rank:best?SIZES.indexOf(best.k):-1,eff:best?.dpi||dpis[0].dpi,dpis,crop,maxL,maxS};
+  return {pass:!!best,maxA:best?.k||null,rank:best?SIZES.indexOf(best.k):-1,eff:best?.dpi??dpis[0].dpi,dpis,crop,
+    cmW:it.w/o.dpi*2.54,cmH:it.h/o.dpi*2.54}; // printed size at the chosen dpi
 }
+/* fit() only depends on the item and dpi/layout, but every redraw filters and sorts all results: remember it */
+const fitMemo=new WeakMap();
+function fitOf(it,o){const k=o.dpi+o.mode,m=fitMemo.get(it);if(m&&m.k===k)return m.f;const f=fit(it,o);fitMemo.set(it,{k,f});return f;}
 function orientOf(it){const r=it.w/it.h;return r>1.08?"landscape":r<0.92?"portrait":"square";}
 
-/* ---------- source adapters: each returns {items, more} ---------- */
+/* ---------- network helpers ---------- */
 async function getJSON(url,ms=20000){
   const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
-  try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error("HTTP "+r.status);return await r.json();}
+  try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error(r.status===429?"too many requests":"HTTP "+r.status);return await r.json();}
   catch(e){throw new Error(e.name==="AbortError"?"timeout":e.message==="Failed to fetch"?"blocked or offline":e.message)}
   finally{clearTimeout(t)}
 }
 async function pool(list,n,fn){const out=[];let i=0;
   await Promise.all(Array.from({length:Math.min(n,list.length)},async()=>{while(i<list.length){const j=i++;try{out[j]=await fn(list[j])}catch(e){out[j]=null}}}));
   return out;}
-const arr=x=>x==null?[]:Array.isArray(x)?x:[x];
 const EN="300388277";
 const isEn=o=>arr(o.language).some(l=>String(l.id||"").endsWith(EN));
 const notation=(n,lang="en")=>{const a=arr(n);return (a.find(x=>x["@language"]===lang)||a[0]||{})["@value"]||"";};
 const rijksData=id=>String(id).replace("https://id.rijksmuseum.nl/","https://data.rijksmuseum.nl/")+"?_profile=la-framed";
-/* pixel size from a JPEG's header: reads only the first bytes of the file (needs CORS + Range on the image host) */
+/* first n bytes of a file: stops downloading even when a server ignores the Range header and sends everything */
+async function headBytes(url,n){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),20000);
+  try{
+    const r=await fetch(url,{headers:{Range:"bytes=0-"+(n-1)},signal:c.signal});if(!r.ok)return null;
+    const rd=r.body.getReader(),b=new Uint8Array(n);let got=0;
+    while(got<n){const {done,value}=await rd.read();if(done)break;const k=Math.min(value.length,n-got);b.set(value.subarray(0,k),got);got+=k;}
+    rd.cancel().catch(()=>{});
+    return b.subarray(0,got);
+  }catch(e){return null}finally{clearTimeout(t)}
+}
+/* pixel size from a JPEG's start-of-frame marker */
+function sofSize(b){
+  let i=2;
+  while(i+9<b.length){
+    if(b[i]!==0xFF){i++;continue}
+    const m=b[i+1];
+    if(m===0xFF){i++;continue} // fill byte
+    if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue}
+    if(m>=0xC0&&m<=0xCF&&m!==0xC4&&m!==0xC8&&m!==0xCC)return {h:b[i+5]<<8|b[i+6],w:b[i+7]<<8|b[i+8]};
+    i+=2+(b[i+2]<<8|b[i+3]);
+  }
+  return null;
+}
+/* pixel size of a JPEG from its first bytes (needs CORS on the image host); reads further if the header is long */
 async function jpegSize(url){
   for(const n of [65536,262144]){
-    const c=new AbortController(),t=setTimeout(()=>c.abort(),20000);
-    let b;try{const r=await fetch(url,{headers:{Range:"bytes=0-"+(n-1)},signal:c.signal});if(!r.ok)return null;b=new Uint8Array(await r.arrayBuffer());}
-    finally{clearTimeout(t)}
-    let i=2;
-    while(i+9<b.length){
-      if(b[i]!==0xFF){i++;continue}
-      const m=b[i+1];
-      if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue}
-      if(m>=0xC0&&m<=0xCF&&m!==0xC4&&m!==0xC8&&m!==0xCC)return {h:b[i+5]<<8|b[i+6],w:b[i+7]<<8|b[i+8]};
-      i+=2+(b[i+2]<<8|b[i+3]);
-    }
+    const b=await headBytes(url,n);if(!b)return null;
+    const sz=sofSize(b);if(sz)return sz;
     if(b.length<n)return null; // whole file read, no size found
   }
   return null;
 }
+const AIC_MIN=need(150).needS; // short side for A4 at the lowest dpi on offer
+const NGA_PAGE=200;
+/* search text for Lucene-style engines (Mia, Smithsonian): plain words only, so it can't cancel the public-domain clause ("forget me NOT") */
+const plainWords=q=>q.replace(/[+\-=&|<>!(){}[\]^"~*?:\\/]/g," ").replace(/\b(AND|OR|NOT)\b/g,m=>m.toLowerCase()).trim();
 let ngaLoading=null;
 function loadNGA(){
   if(window.NGA_INDEX)return Promise.resolve();
@@ -289,15 +335,17 @@ async function yale(key,o,page){
     const iiif=arr(body.service).map(x=>x["@id"]||x.id).find(Boolean);if(!iiif)return null;
     const meta=(...ks)=>{for(const k of ks){const v=(arr(man.metadata).find(m=>arr(m.label?.en)[0]===k)?.value?.en||[])[0];if(v)return v}return ""};
     const pr=ob.produced_by||{},ts=pr.timespan||{};
+    // medium = classification + materials, never YCBA's department name ("Paintings and Sculpture" would read as sculpture)
     return {id:key+"-"+objNo,src:key,title:meta("Title")||ob._label||"Untitled",
       artist:[...new Set(arr(pr.part).flatMap(x=>arr(x.carried_out_by)).map(a=>a._label).filter(Boolean))].join(", ").replace(/^Artist[^:]*:\s*/,"")||meta("Creator","Creator(s)").split(",")[0],
-      year:yearOf(ts.begin_of_the_begin),date:(arr(ts.identified_by)[0]||{}).content||meta("Date"),medium:[meta("Classification","Collection"),meta("Medium")].filter(Boolean).join(" · "),
+      year:yearOf(ts.begin_of_the_begin),date:(arr(ts.identified_by)[0]||{}).content||meta("Date"),medium:[meta("Classification"),meta("Medium")].filter(Boolean).join(" · "),
       w:+(body.width||cv.width),h:+(body.height||cv.height),thumb:iiif+"/full/!400,400/0/default.jpg",preview:iiif+"/full/!1200,1200/0/default.jpg",iiif,
-      page:arr(man.homepage)[0]?.id||id,download:iiif+"/full/full/0/default.jpg",licence:"CC0",licOk:true,clientMedium:!!o.medium,clientEra:true};
+      page:arr(man.homepage)[0]?.id||id,download:iiif+"/full/full/0/default.jpg",licence:/zero/.test(man.rights)?"CC0":"Public domain",clientMedium:!!o.medium,clientEra:true};
   })).filter(Boolean);
   return {items,more:!!d.next};
 }
 
+/* ---------- source adapters: each returns {items, more}; `st` holds that source's paging state for the current search ---------- */
 const adapters={
   async cma(o,page){
     const p=new URLSearchParams({cc0:"1",has_image:"1",limit:"100",skip:String(page*100)});
@@ -308,19 +356,20 @@ const adapters={
     const d=await getJSON("https://openaccess-api.clevelandart.org/api/artworks/?"+p);
     const items=(d.data||[]).filter(a=>a.images&&(a.images.full||a.images.print)).map(a=>{
       const full=a.images.full||a.images.print;
-      return {id:"cma-"+a.id,src:"cma",title:a.title,artist:(a.creators&&a.creators[0]&&a.creators[0].description)||a.culture?.[0]||"",
+      return {id:"cma-"+a.id,src:"cma",title:a.title||"Untitled",artist:(a.creators&&a.creators[0]&&a.creators[0].description)||a.culture?.[0]||"",
         year:a.creation_date_earliest??yearOf(a.creation_date),date:a.creation_date||"",medium:[a.type,a.technique].filter(Boolean).join(" · "),
         w:+full.width,h:+full.height,thumb:a.images.web?.url,preview:a.images.print?.url||a.images.web?.url,
-        page:a.url,download:full.url,downloadAlt:a.images.print?.url,licence:a.share_license_status||"CC0",licOk:true};
+        page:a.url,download:full.url,downloadAlt:a.images.print?.url,licence:a.share_license_status||"CC0"};
     });
     return {items,more:(page+1)*100<(d.info?.total||0)};
   },
+  /* Art Institute of Chicago: sizes are the master file's; the size pre-filter uses the lowest dpi on offer, so a later dpi change can't miss anything */
   async aic(o,page,noSize){
     const filter=[{term:{is_public_domain:true}},{exists:{field:"image_id"}}];
     if(o.medium)filter.push({match:{artwork_type_title:MED[o.medium].aic}});
     if(o.from!=null)filter.push({range:{date_end:{gte:o.from}}});
     if(o.to!=null)filter.push({range:{date_start:{lte:o.to}}});
-    if(!noSize)filter.push({bool:{should:[{range:{"thumbnail.width":{gte:o.needS}}},{range:{"thumbnail.height":{gte:o.needS}}}],minimum_should_match:1}});
+    if(!noSize)filter.push({bool:{should:[{range:{"thumbnail.width":{gte:AIC_MIN}}},{range:{"thumbnail.height":{gte:AIC_MIN}}}],minimum_should_match:1}});
     const params={limit:100,page:page+1,fields:["id","title","image_id","thumbnail","date_start","date_end","date_display","medium_display","artwork_type_title","artist_title"],query:{bool:{filter}}};
     if(o.q)params.q=o.q;
     let d;
@@ -330,43 +379,43 @@ const adapters={
     const items=(d.data||[]).filter(a=>a.image_id&&a.thumbnail?.width).map(a=>({
       id:"aic-"+a.id,src:"aic",title:a.title,artist:a.artist_title||"",year:a.date_start,date:a.date_display||"",
       medium:[a.artwork_type_title,a.medium_display].filter(Boolean).join(" · "),w:a.thumbnail.width,h:a.thumbnail.height,
-      thumb:`${iiif}/${a.image_id}/full/400,/0/default.jpg`,thumbAlt:[`${iiif}/${a.image_id}/full/843,/0/default.jpg`].filter(Boolean),preview:`${iiif}/${a.image_id}/full/843,/0/default.jpg`,
+      thumb:`${iiif}/${a.image_id}/full/400,/0/default.jpg`,thumbAlt:[`${iiif}/${a.image_id}/full/843,/0/default.jpg`],preview:`${iiif}/${a.image_id}/full/843,/0/default.jpg`,
       iiif:`${iiif}/${a.image_id}`,page:`https://www.artic.edu/artworks/${a.id}`,download:`${iiif}/${a.image_id}/full/full/0/default.jpg`,
-      licence:"CC0",licOk:true,sizeNote:"Size is the museum's master file; the download server may cap it — use \"Check downloadable size\"."}));
+      licence:"CC0",sizeNote:"Size is the museum's master file; the download server may cap it — use \"Check downloadable size\"."}));
     return {items,more:(d.pagination?.current_page||0)<(d.pagination?.total_pages||0)};
   },
   async smk(o,page){
-    let keys=o.q||"*";
-    const p=new URLSearchParams({keys,offset:String(page*100),rows:"100",lang:"en"});
+    const p=new URLSearchParams({keys:o.q||"*",offset:String(page*100),rows:"100",lang:"en"});
     const url="https://api.smk.dk/api/v1/art/search/?"+p+"&filters=[public_domain:true],[has_image:true]";
     const d=await getJSON(url);
-    const items=(d.items||[]).filter(a=>a.image_width&&a.image_height).map(a=>{
+    const items=(d.items||[]).filter(a=>a.public_domain===true&&a.image_width&&a.image_height).map(a=>{
       const t=(a.titles||[]).find(x=>/eng/i.test(x.language||""))||(a.titles||[])[0]||{};
       const pd=(a.production_date||[])[0]||{};
       return {id:"smk-"+a.object_number,src:"smk",title:t.title||a.object_number,artist:(a.production||[]).map(x=>x.creator).filter(Boolean).join(", "),
         year:yearOf(pd.start),date:pd.period||"",medium:[...(a.object_names||[]).map(x=>x.name),...(a.techniques||[])].join(" · "),
-        w:a.image_width,h:a.image_height,thumb:a.image_thumbnail,preview:a.image_iiif_id?a.image_iiif_id+"/full/!1200,/0/default.jpg":a.image_thumbnail,
-        iiif:a.image_iiif_id,page:a.frontend_url,download:a.image_native,licence:"Public domain (CC0 / PDM)",licOk:true,clientMedium:true,clientEra:true};
+        w:a.image_width,h:a.image_height,thumb:a.image_thumbnail,preview:a.image_iiif_id?a.image_iiif_id+"/full/!1200,1200/0/default.jpg":a.image_thumbnail,
+        iiif:a.image_iiif_id,page:a.frontend_url,download:a.image_native,licence:/zero/.test(a.rights||"")?"CC0":"Public domain",clientMedium:true,clientEra:true};
     });
     return {items,more:(page+1)*100<(d.found||0)};
   },
-  async wm(o,page,_,state){
+  /* Wikimedia Commons: licence tags are user-supplied, so only public-domain / CC0 tagged files are kept, flagged "licence varies" */
+  async wm(o,page,_,st){
     let q=o.q||"art";
-    if(o.medium)q+=" "+MED[o.medium].kw;
+    if(o.medium)q+=" "+o.medium;
     q+=" filesize:>2500";
     q+=" filetype:bitmap";
-    const p=new URLSearchParams({action:"query",format:"json",origin:"*",generator:"search",gsrnamespace:"6",gsrlimit:"50",gsroffset:String(state.offset||0),gsrsearch:q,
+    const p=new URLSearchParams({action:"query",format:"json",origin:"*",generator:"search",gsrnamespace:"6",gsrlimit:"50",gsroffset:String(st.offset||0),gsrsearch:q,
       prop:"imageinfo",iiprop:"url|size|extmetadata",iiurlwidth:"480",iiextmetadatafilter:"LicenseShortName|DateTimeOriginal|Artist|ObjectName|ImageDescription"});
     const d=await getJSON("https://commons.wikimedia.org/w/api.php?"+p);
-    state.offset=d.continue?.gsroffset;
+    st.offset=d.continue?.gsroffset;
     const pages=Object.values(d.query?.pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
     const items=pages.filter(pg=>pg.imageinfo?.[0]).map(pg=>{
       const ii=pg.imageinfo[0], m=ii.extmetadata||{};const lic=strip(m.LicenseShortName?.value)||"Unknown";
       const dt=strip(m.DateTimeOriginal?.value);
       return {id:"wm-"+pg.pageid,src:"wm",title:strip(m.ObjectName?.value)||pg.title.replace(/^File:/,"").replace(/\.[a-z]+$/i,""),artist:strip(m.Artist?.value),
         year:yearOf(dt),date:dt,medium:"",w:ii.width,h:ii.height,thumb:ii.thumburl,preview:ii.thumburl?.replace(/\/\d+px-/,"/1200px-"),page:ii.descriptionurl,download:ii.url,
-        licence:lic,licOk:/public domain|^pd|cc0|cc-zero/i.test(lic),clientEra:true};
-    }).filter(it=>it.licOk);
+        licence:lic,clientEra:true};
+    }).filter(it=>/public domain|^pd|cc0|cc-zero/i.test(it.licence));
     return {items,more:!!d.continue};
   },
 
@@ -374,7 +423,7 @@ const adapters={
   async rijks(o,page,_,st){
     if(!st.streams){
       const base={imageAvailable:"true"};
-      if(o.medium)base.type=RIJKS_TYPE[o.medium];
+      if(o.medium)base.type=o.medium;
       if(o.from!=null&&o.to!=null&&Math.floor(o.from/100)===Math.floor(o.to/100))base.creationDate=Math.floor(o.from/100)+"??";
       const q=o.q.toLowerCase().trim();const terms=new Set();
       if(q){ (NL[q]||[]).forEach(t=>terms.add(t)); q.split(/\s+/).forEach(w=>(NL[w]||[]).forEach(t=>terms.add(t))); terms.add(o.q); }
@@ -396,7 +445,7 @@ const adapters={
       const vi=arr(ob.shows)[0];if(!vi)return null;
       const v=await getJSON(rijksData(vi.id));
       const rights=arr(v.subject_to).flatMap(r=>arr(r.classified_as)).map(c=>c.id||"").join(" ");
-      if(rights&&!/publicdomain/.test(rights))return null;
+      if(!/publicdomain/.test(rights))return null; // no rights statement: not assumed free
       const dobj=arr(v.digitally_shown_by)[0];if(!dobj)return null;
       const dg=await getJSON(rijksData(dobj.id));
       const ap=arr(dg.access_point).map(a=>a.id).find(x=>/iiif\.micr\.io\//.test(x||""));if(!ap)return null;
@@ -415,7 +464,7 @@ const adapters={
         ||("https://www.rijksmuseum.nl/en/collection/"+objNo);
       return {id:"rijks-"+id.split("/").pop(),src:"rijks",title,artist:cre,year:yearOf(ts.begin_of_the_begin),date:dateTxt,medium:[...new Set(med)].join(" · "),
         w:info.width,h:info.height,thumb:iiif+"/full/400,/0/default.jpg",preview:iiif+"/full/1200,/0/default.jpg",iiif,page:pageUrl,
-        download:iiif+"/full/max/0/default.jpg",licence:/zero/.test(rights)?"CC0":"Public domain",licOk:true,clientEra:true};
+        download:iiif+"/full/max/0/default.jpg",licence:/zero/.test(rights)?"CC0":"Public domain",clientEra:true};
     })).filter(Boolean);
     return {items,more:st.buf.length>0||st.streams.some(s=>s.url)};
   },
@@ -433,7 +482,7 @@ const adapters={
       const sz=await jpegSize(a.primaryImage);if(!sz)return null;
       return {id:"met-"+a.objectID,src:"met",title:a.title||"Untitled",artist:a.artistDisplayName||a.culture||"",year:a.objectBeginDate??yearOf(a.objectDate),date:a.objectDate||"",
         medium:[a.classification||a.objectName,a.medium].filter(Boolean).join(" · "),w:sz.w,h:sz.h,thumb:a.primaryImageSmall||a.primaryImage,preview:a.primaryImageSmall||a.primaryImage,
-        page:a.objectURL,download:a.primaryImage,licence:"CC0",licOk:true};
+        page:a.objectURL,download:a.primaryImage,licence:"CC0"};
     })).filter(Boolean);
     return {items,more:(page+1)*24<(d.total||0)};
   },
@@ -469,7 +518,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
       return {id:"getty-"+val(r,"o").split("/").pop(),src:"getty",title:label.replace(/\s*\([^()]*\)\s*$/,"")||"Untitled",artist:[...new Set(val(r,"artist").split(", ").filter(Boolean))].join(", "),
         year,date:year?String(year):"",medium:val(r,"types").split("|").filter(t=>t&&!/Object Record|^Artwork$|\(/.test(t)).join(" · "),w:dim("Width"),h:dim("Height"),
         thumb:iiif+"/full/!400,400/0/default.jpg",preview:iiif+"/full/!1200,1200/0/default.jpg",iiif,
-        page:val(r,"page")||val(r,"o"),download:iiif+"/full/max/0/default.jpg",licence:/zero/.test(rights)?"CC0":"Public domain",licOk:true,clientEra:true};
+        page:val(r,"page")||val(r,"o"),download:iiif+"/full/max/0/default.jpg",licence:/zero/.test(rights)?"CC0":"Public domain",clientEra:true};
     })).filter(Boolean);
     return {items,more:rows.length===24};
   },
@@ -477,7 +526,8 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
   /* Smithsonian Open Access: search results already carry CC0 status and pixel size of each high-res JPEG */
   async si(o,page){
     const key=$("sikey").value.trim()||"DEMO_KEY";
-    const p=new URLSearchParams({q:(o.q||"*")+" AND online_media_type:Images AND media_usage:CC0",start:String(page*100),rows:"100",api_key:key});
+    const q=plainWords(o.q)||"*"; // CC0 is also re-checked per image below
+    const p=new URLSearchParams({q:q+" AND online_media_type:Images AND media_usage:CC0",start:String(page*100),rows:"100",api_key:key});
     const d=await getJSON("https://api.si.edu/openaccess/api/v1.0/search?"+p);
     const rows=d.response?.rows||[];
     const items=rows.map(r=>{
@@ -490,7 +540,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
       return {id:"si-"+r.id,src:"si",title:r.title||dn.title?.content||"Untitled",artist:arr(ft.name).map(x=>x.content).filter(Boolean).slice(0,2).join(", "),
         year:yearOf(date),date,medium:[...arr(ft.objectType).map(x=>x.content),...arr(ft.physicalDescription).map(x=>x.content)].filter(Boolean).join(" · "),
         w:+best.j.width,h:+best.j.height,thumb:thumb+"&max=400",preview:thumb+"&max=1200",page:dn.record_link||dn.guid,download:best.j.url,
-        licence:"CC0",licOk:true,clientMedium:true,clientEra:true,provider:dn.data_source};
+        licence:"CC0",clientMedium:true,clientEra:true,provider:dn.data_source};
     }).filter(Boolean);
     return {items,more:(page+1)*100<(d.response?.rowCount||0)};
   },
@@ -501,16 +551,16 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
 
   /* Mia (Minneapolis): search hits carry public-domain status, classification and the pixel size of the master JPEG, which img.artsmia.org serves at full size */
   async mia(o,page){
-    let q=(o.q||"").replace(/[+\-=&|<>!(){}[\]^"~*?:\\/]/g," ").trim()||"*";
+    let q=plainWords(o.q)||"*";
     q+=' rights_type:"Public Domain" image:valid public_access:1';
     if(o.medium)q+=" classification:"+MED[o.medium].mia;
     if(o.from>=1000&&(o.to==null||o.to>=1000))q+=` dated:[${o.from} TO ${o.to??"*"}]`; // "dated" is text: a rough pre-filter, the exact era is checked client-side
     const d=await getJSON(`https://search.artsmia.org/${encodeURIComponent(q)}?size=100&from=${page*100}`);
-    const items=(d.hits?.hits||[]).map(x=>x._source).filter(a=>a.image_width&&a.image_height&&a.Cache_Location&&a.Primary_RenditionNumber).map(a=>{
+    const items=(d.hits?.hits||[]).map(x=>x._source).filter(a=>a.rights_type==="Public Domain"&&a.image_width&&a.image_height&&a.Cache_Location&&a.Primary_RenditionNumber).map(a=>{
       const img=`https://img.artsmia.org/web_objects_cache/${a.Cache_Location.replace(/\\/g,"/")}/${a.Primary_RenditionNumber.replace(/\.\w+$/,"")}_`;
       return {id:"mia-"+a.id,src:"mia",title:String(a.title||"Untitled").replace(/<[^>]+>/g,""),artist:(a.artist||"").split(";")[0].replace(/^[A-Za-z ]+:\s*/,"")||a.culture||a.country||"",
         year:yearOf(a.dated),date:a.dated||"",medium:[a.classification,a.object_name,a.medium].filter(Boolean).join(" · "),w:+a.image_width,h:+a.image_height,
-        thumb:img+"400.jpg",preview:img+"800.jpg",page:"https://collections.artsmia.org/art/"+a.id,download:img+"full.jpg",licence:"Public domain",licOk:true,clientEra:true};
+        thumb:img+"400.jpg",preview:img+"800.jpg",page:"https://collections.artsmia.org/art/"+a.id,download:img+"full.jpg",licence:"Public domain",clientEra:true};
     });
     return {items,more:(page+1)*100<Math.min(d.hits?.total?.value||0,10000)};
   },
@@ -534,7 +584,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
       return {id:"wellcome-"+im.id,src:"wellcome",title:(s.title||"Untitled").replace(/[\s.\/:;]+$/,""),artist:ag.slice(0,2).join(", "),year,date,
         medium:[w.workType?.label,...arr(s.genres).map(g=>g.label),w.physicalDescription].filter(Boolean).join(" · "),w:+inf.width,h:+inf.height,
         thumb:th+"/full/!400,400/0/default.jpg",preview:th+"/full/!1024,1024/0/default.jpg",iiif,page:"https://wellcomecollection.org/works/"+s.id,
-        download:iiif+"/full/full/0/default.jpg",licence:loc.license.id==="pdm"?"Public domain mark":"CC0",licOk:true,clientEra:year!=null};
+        download:iiif+"/full/full/0/default.jpg",licence:loc.license.id==="pdm"?"Public domain mark":"CC0",clientEra:year!=null};
     })).filter(Boolean);
     return {items,more:page+1<(d.totalPages||0)};
   },
@@ -581,12 +631,12 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
         artist:(it.creators?.[0]?.title||arr(it.contributors)[0]||arr(r.contributor)[0]||"").replace(/[,.]?\s*(photographer|artist|publisher|printer|lithographer|engraver|cartographer|creator|draftsman|designer|illustrator|author)[.,]?\s*$/i,""),
         year:yearOf(arr(r.dates)[0]||r.date),date:it.date||it.created_published_date||arr(r.dates)[0]||"",medium:[k,g].filter(Boolean).join(" · "),w,h,
         thumb:small||iiif+"/full/400,/0/default.jpg",preview:big||iiif+"/full/!1200,1200/0/default.jpg",iiif,
-        page:r.url.replace(/^http:/,"https:"),download:iiif+"/full/full/0/default.jpg",licence:rt?rt.split(/(?<=\.)\s/)[0]:"No known restrictions (LoC Geography & Map policy)",licOk:true,clientEra:true};
+        page:r.url.replace(/^http:/,"https:"),download:iiif+"/full/full/0/default.jpg",licence:rt?rt.split(/(?<=\.)\s/)[0]:"No known restrictions (LoC Geography & Map policy)",clientEra:true};
     })).filter(Boolean);
     return {items,more:!!d.pagination?.next};
   },
 
-  /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
+  /* National Gallery of Art: searched locally in the open-data index (nga-index.json), handed out in pages like the other sources */
   async nga(o,page,_,st){
     await loadNGA();
     if(!st.list){
@@ -602,18 +652,18 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
         return words.every(w=>w.test(hay));
       });
     }
-    const slice=page?[]:st.list;
+    const slice=st.list.slice(page*NGA_PAGE,(page+1)*NGA_PAGE);
     const iiif=u=>"https://api.nga.gov/iiif/"+u;
     const items=slice.map(r=>({id:"nga-"+r[11],src:"nga",title:r[3],artist:r[4],year:r[6],date:r[5],medium:r[9],w:r[1],h:r[2],
       thumb:iiif(r[0])+"/full/!400,400/0/default.jpg",preview:iiif(r[0])+"/full/!1200,1200/0/default.jpg",iiif:iiif(r[0]),
-      page:"https://www.nga.gov/collection/art-object-page."+r[11]+".html",download:iiif(r[0])+"/full/max/0/default.jpg",licence:"CC0",licOk:true}));
-    return {items,more:false};
+      page:"https://www.nga.gov/collection/art-object-page."+r[11]+".html",download:iiif(r[0])+"/full/max/0/default.jpg",licence:"CC0"}));
+    return {items,more:(page+1)*NGA_PAGE<st.list.length};
   },
 
   /* Europeana: aggregator. Search pre-filters to >4 MP public-domain images; exact pixel size comes from each record */
   async eu(o,page,_,st){
     const key=$("eukey").value.trim()||"api2demo";
-    const p=new URLSearchParams({wskey:key,query:(o.q||"*")+(o.medium?" "+MED[o.medium].kw:""),rows:"24",cursor:st.cursor||"*",media:"true",profile:"rich"});
+    const p=new URLSearchParams({wskey:key,query:(o.q||"*")+(o.medium?" "+o.medium:""),rows:"24",cursor:st.cursor||"*",media:"true",profile:"rich"});
     // "reusability=open" also admits CC BY / BY-SA, which can fill whole pages; ask for PD/CC0 only
     p.append("qf","TYPE:IMAGE");p.append("qf","IMAGE_SIZE:extra_large");p.append("qf","RIGHTS:*publicdomain*");
     if(o.from!=null||o.to!=null)p.append("qf",`YEAR:[${o.from??0} TO ${o.to??2100}]`);
@@ -631,7 +681,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
       const lic=arr(it.rights)[0]||"";
       return {id:"eu-"+it.id,src:"eu",title:arr(it.title)[0]||"Untitled",artist:arr(it.dcCreator)[0]||"",year:yearOf(arr(it.year)[0]),date:arr(it.year)[0]||"",
         medium:prov?"via "+prov:"",w:+best.ebucoreWidth,h:+best.ebucoreHeight,thumb:arr(it.edmPreview)[0],preview:arr(it.edmPreview)[0],
-        page:ag.edmIsShownAt||it.guid,download:best.about,licence:/zero/.test(lic)?"CC0":"Public domain mark",licOk:true,clientEra:true,provider:prov};
+        page:ag.edmIsShownAt||it.guid,download:best.about,licence:/zero/.test(lic)?"CC0":"Public domain mark",clientEra:true,provider:prov};
     })).filter(Boolean);
     return {items,more:!!d.nextCursor&&(d.items||[]).length>0};
   }
@@ -639,11 +689,17 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
 
 /* ---------- search engine ---------- */
 const PAGE=48; // cards added each time the viewer scrolls near the bottom
+const NEAR=1200; // px: load the next batch when the bottom of the grid is this close to the screen
 let results=[],seen=new Set(),state={},runId=0;
-let view={src:new Set(),orient:"",min:"",art:true,sort:"best",limit:PAGE};
+let searched=null; // the submitted search: results are filtered and fetched with this, not with anything typed since
+let view={src:new Set(),orient:"",min:"",art:true,sort:"best",limit:PAGE,order:[]};
+let lastList=[],lastFetchAt=-1; // last rendered result list; its length when sources were last asked for more
+/* the submitted search, with the live dpi, layout and licence (changing those re-grades results instantly) */
+function cur(){const o=opts();return searched?{...searched,dpi:o.dpi,mode:o.mode,lic:o.lic}:o;}
 function keep(it,o){
   if(!(it.w>0&&it.h>0))return false;
-  if(!fit(it,o).pass)return false;
+  if(o.lic!=="all"&&!SRC[it.src].vetted)return false;
+  if(!fitOf(it,o).pass)return false;
   if(it.clientMedium&&o.medium&&!MED[o.medium].re.test(it.medium))return false;
   if(it.clientEra&&(o.from!=null||o.to!=null)){
     if(it.year==null)return it.src==="wm";
@@ -653,98 +709,159 @@ function keep(it,o){
   return true;
 }
 /* "Artworks only": drops 3-D and functional objects, judged only on each museum's own object type / medium text (titles are unreliable: "Vase of Flowers" is usually a picture) */
-const JUNK=/\b(ceramics?|pottery|porcelain|stoneware|earthenware|faience|maiolica|majolica|jade|hardstone|metalwork|gold and silver|silverware|decorative arts?|sculptures?|statuettes?|figurines?|furniture|woodwork|coins?|medals?|numismatics?|jewel(?:le)?ry|costumes?|hats?|headwear|footwear|shoes|dresses|fashion accessor(?:y|ies)|arms and armou?r|weapons?|vessels?|vases?|bowls?|teapots?|clocks?|lighting|specimens?|fossils?|minerals?)\b/i;
-const printable=o=>results.filter(it=>keep(it,o)&&!(view.art&&JUNK.test(it.medium||"")));
-function visible(o){
-  let l=printable(o);
-  if(view.src.size)l=l.filter(it=>view.src.has(it.src));
-  if(view.orient)l=l.filter(it=>orientOf(it)===view.orient);
-  if(view.min)l=l.filter(it=>fit(it,o).rank>=SIZES.indexOf(view.min));
+const JUNK=/\b(ceramics?|pottery|porcelain|stoneware|earthenware|faience|maiolica|majolica|jade|hardstone|metalwork|gold and silver|silverware|glassware|decorative arts?|sculptures?|statuettes?|figurines?|furniture|furnishings?|woodwork|coins?|medals?|numismatics?|jewel(?:le)?ry|costumes?|clothing|garments?|menswear|womenswear|childrenswear|textiles?|hats?|headwear|footwear|shoes|dresses|skirts?|vests?|fashion accessor(?:y|ies)|arms and armou?r|weapons?|vessels?|vases?|bowls?|urns?|baskets?|chests?|teapots?|tableware|stoves?|clocks?|lighting|ritual objects?|religious objects?|specimens?|fossils?|minerals?)\b/i;
+/* every filter except the source pills (the pills show what each source would add) */
+function filtered(o){
+  const minRank=view.min?SIZES.indexOf(view.min):0;
+  return results.filter(it=>keep(it,o)&&!(view.art&&JUNK.test(it.medium||""))&&(!view.orient||orientOf(it)===view.orient)&&fitOf(it,o).rank>=minRank);
+}
+const bySource=l=>view.src.size?l.filter(it=>view.src.has(it.src)):l;
+function visible(o,base=filtered(o)){
+  const l=bySource(base).slice();
+  const words=o.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const miss=new Map(l.map(it=>{const t=String(it.title).toLowerCase();return [it,words.length&&words.every(w=>t.includes(w))?0:1];})); // 0 = every keyword in the title
   const yr=(it,dir)=>it.year??(dir>0?1e9:-1e9);
-  const words=opts().q.toLowerCase().split(/\s+/).filter(Boolean);
-  const inTitle=it=>words.length&&words.every(w=>String(it.title).toLowerCase().includes(w))?0:1;
-  const by={best:(a,b)=>inTitle(a)-inTitle(b)||a.srank-b.srank||fit(b,o).rank-fit(a,o).rank,
-    res:(a,b)=>fit(b,o).rank-fit(a,o).rank||b.w*b.h-a.w*a.h,
+  const by={best:(a,b)=>miss.get(a)-miss.get(b)||a.srank-b.srank||fitOf(b,o).rank-fitOf(a,o).rank,
+    res:(a,b)=>fitOf(b,o).rank-fitOf(a,o).rank||b.w*b.h-a.w*a.h,
     early:(a,b)=>yr(a,1)-yr(b,1),late:(a,b)=>yr(b,-1)-yr(a,-1),
     title:(a,b)=>String(a.title).localeCompare(String(b.title)),
     mp:(a,b)=>b.w*b.h-a.w*a.h}[view.sort];
-  return l.sort(by);
+  // cards the viewer has already scrolled past keep their place; later arrivals are sorted after them
+  const pos=new Map(view.order.map((id,i)=>[id,i]));
+  return l.sort(pos.size?(a,b)=>(pos.get(a.id)??1e9)-(pos.get(b.id)??1e9)||by(a,b):by);
 }
-function statusLine(){
-  const o=opts(),all=printable(o);
-  const busy=o.srcs.some(k=>state[k]?.busy);
-  const n=k=>all.filter(it=>it.src===k).length;
-  $("status").innerHTML=`<button type="button" class="st f ${view.src.size?"":"on"}" data-src="">All sources · ${all.length}</button>`+
-    o.srcs.map(k=>{const s=state[k]||{};const name=SOURCES.find(x=>x.key===k).name.replace(/ \(300\+.*\)/,"");
-      if(s.err)return `<span class="st err" title="${esc(s.err)}">${esc(name)}: failed (${esc(s.err)})</span>`;
-      return `<button type="button" class="st f ${view.src.has(k)?"on":""}" data-src="${k}">${esc(name)} · ${n(k)}${s.busy?" …":""}</button>`}).join("")+
-    (busy?`<span class="note">searching…</span>`:"");
-  $("status").querySelectorAll("button[data-src]").forEach(b=>b.onclick=()=>{
-    const k=b.dataset.src;
-    if(!k)view.src.clear();else view.src.has(k)?view.src.delete(k):view.src.add(k);
-    view.limit=PAGE;rerender();topUp();
-  });
+/* sources of this search that are on screen: not hidden by the licence setting or by the source pills */
+const liveSrcs=o=>(searched?.srcs||[]).filter(k=>(o.lic==="all"||SRC[k].vetted)&&(!view.src.size||view.src.has(k)));
+function activity(o){const ks=liveSrcs(o);return {busy:ks.some(k=>state[k]?.busy),canFetch:ks.some(k=>state[k]?.more&&!state[k]?.err)};}
+const errText=(k,e)=>/too many/.test(e)?(k==="si"?"rate-limited — add a free key in Settings":"rate-limited — try again later"):`failed (${e})`;
+function statusLine(o,base){
+  const f=document.activeElement,fk=$("status").contains(f)?f.dataset.src:null; // keep keyboard focus on the same pill
+  const n={};base.forEach(it=>n[it.src]=(n[it.src]||0)+1);
+  const ks=searched.srcs.filter(k=>o.lic==="all"||SRC[k].vetted);
+  $("status").innerHTML=`<button type="button" class="st ${view.src.size?"":"on"}" aria-pressed="${!view.src.size}" data-src="">All sources · ${base.length.toLocaleString()}</button>`+
+    ks.map(k=>{const s=state[k]||{};
+      if(s.err)return `<span class="st err" title="${esc(s.err)}">${esc(shortName(k))}: ${esc(errText(k,s.err))}</span>`;
+      return `<button type="button" class="st ${view.src.has(k)?"on":""}" aria-pressed="${view.src.has(k)}" data-src="${k}">${esc(shortName(k))} · ${(n[k]||0).toLocaleString()}${s.busy?" …":""}</button>`}).join("")+
+    (activity(o).busy?`<span class="note">searching…</span>`:"");
+  if(fk!=null)$("status").querySelector(`[data-src="${fk}"]`)?.focus();
 }
+$("status").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-src]");if(!b)return;
+  const k=b.dataset.src;if(!k)view.src.clear();else view.src.has(k)?view.src.delete(k):view.src.add(k);
+  resetView();
+});
 /* each source pages independently, so fast sources show results straight away */
-async function sourceLoop(k,id,o){
+async function sourceLoop(k,id){
   const s=state[k];
-  while(id===runId&&s.more&&!s.err&&s.rounds<4&&visible(o).length<view.limit+PAGE){
-    s.busy=true;s.rounds++;statusLine();
+  while(id===runId&&s.more&&!s.err&&s.rounds<4&&bySource(filtered(cur())).length<view.limit+PAGE){
+    s.busy=true;s.rounds++;scheduleRender();
     try{
-      const r=await adapters[k](o,s.page,false,s);if(id!==runId)return;
+      const r=await adapters[k](cur(),s.page,false,s);if(id!==runId)return;
       s.page++;s.more=!!r.more;
-      for(const it of r.items){if(seen.has(it.id))continue;seen.add(it.id);it.srank=s.count=(s.count||0)+1;results.push(it);}
+      for(const it of r.items){if(seen.has(it.id))continue;seen.add(it.id);it.w=+it.w||0;it.h=+it.h||0;it.srank=s.count=(s.count||0)+1;results.push(it);}
     }catch(e){if(id!==runId)return;s.err=e.message||"network";s.more=false;}
     s.busy=false;scheduleRender();
   }
-  s.busy=false;scheduleRender();
+  if(id===runId){s.busy=false;scheduleRender();}
 }
 function topUp(){
-  const o=opts(),id=runId;
-  if(visible(o).length>=view.limit+PAGE)return;
-  o.srcs.filter(k=>state[k]&&!state[k].busy&&state[k].more&&!state[k].err&&(!view.src.size||view.src.has(k)))
-    .forEach(k=>{state[k].rounds=0;sourceLoop(k,id,o)});
+  if(!searched)return;
+  const o=cur(),id=runId;
+  if(bySource(filtered(o)).length>=view.limit+PAGE)return;
+  liveSrcs(o).filter(k=>{const s=state[k];return s&&!s.busy&&s.more&&!s.err;}).forEach(k=>{state[k].rounds=0;sourceLoop(k,id);});
 }
+/* after a sort / filter / setting change: start again from the top of the list */
+function resetView(){view.limit=PAGE;view.order=[];lastFetchAt=-1;rerender();topUp();}
 let rq=0;function scheduleRender(){if(!rq)rq=requestAnimationFrame(()=>{rq=0;rerender()})}
-function run(){
-  const o=opts();store.set("pf_form",{q:o.q,medium:o.medium,from:$("from").value,to:$("to").value,dpi:String(o.dpi),mode:o.mode,lic:$("lic").value,eukey:$("eukey").value,sikey:$("sikey").value});
-  showNeed();runId++;results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;
+const formState=()=>({q:$("q").value,medium:$("medium").value,from:$("from").value,to:$("to").value});
+function run(push=true){
+  const o=opts();
+  store.set("pf_form",{...formState(),dpi:String(o.dpi),mode:o.mode,lic:o.lic,eukey:$("eukey").value,sikey:$("sikey").value});
+  if(push)history[history.state?"pushState":"replaceState"](formState(),""); // Back returns to the previous search
+  showNeed();runId++;searched=o;results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;view.order=[];lastFetchAt=-1;lastList=[];
   o.srcs.forEach(k=>state[k]={page:0,more:true,rounds:0});
-  $("grid").innerHTML="";$("more").hidden=true;cardCache.clear();lastFetchAt=-1;$("tools").hidden=false;
-  if(!o.srcs.length){$("empty").hidden=false;$("empty").textContent="Pick at least one source.";return;}
+  cardCache.clear();$("grid").replaceChildren();$("tools").hidden=false;
+  if(!o.srcs.length){searched=null;$("status").replaceChildren();$("more").hidden=true;$("empty").hidden=false;$("empty").textContent="Pick at least one source.";return;}
   rerender();
-  o.srcs.forEach(k=>sourceLoop(k,runId,o));
+  o.srcs.forEach(k=>sourceLoop(k,runId));
 }
-$("srcs").addEventListener("change",()=>store.set("pf_off",[...$("srcs").querySelectorAll("input:not(:checked)")].map(i=>i.value)));
-$("f").addEventListener("submit",e=>{e.preventDefault();run()});
-/* infinite scroll: when the bottom of the grid comes into view, show more cards and let sources fetch further */
-let lastFetchAt=-1; // results.length when sources were last asked for more; stops auto-fetch when a round finds nothing new
+/* on phones the form is taller than the screen: bring the results into view */
+function toResults(){if(innerWidth<760)$("status").scrollIntoView({behavior:"smooth"});else scrollTo({top:0,behavior:"smooth"});}
+$("f").addEventListener("submit",e=>{e.preventDefault();run();toResults();});
+addEventListener("popstate",e=>{const h=e.state;if(!h)return;for(const k in h)if($(k))$(k).value=h[k];if($("dlg").open)$("dlg").close();run(false);});
+/* infinite scroll: when the bottom of the grid comes near, show more cards and let sources fetch further */
 function maybeMore(force){
-  const m=$("more");if(m.hidden||!results.length)return;
-  if(m.getBoundingClientRect().top>innerHeight+1200)return; // bottom not near the screen
-  const o=opts(),list=visible(o);
-  if(list.length>view.limit){view.limit+=PAGE;scheduleRender();return;}
-  const busy=o.srcs.some(k=>state[k]?.busy),canFetch=o.srcs.some(k=>state[k]?.more&&!state[k]?.err);
-  if(busy||!canFetch||(!force&&results.length===lastFetchAt))return;
-  lastFetchAt=results.length;view.limit+=PAGE;topUp();
+  const m=$("more");if(m.hidden||!searched)return;
+  if(m.getBoundingClientRect().top>innerHeight+NEAR)return; // bottom not near the screen
+  const pin=()=>{view.order=lastList.slice(0,view.limit).map(it=>it.id);view.limit+=PAGE;};
+  if(lastList.length>view.limit){pin();scheduleRender();return;}
+  const o=cur(),{busy,canFetch}=activity(o);
+  // only fetch again if the last batch added something visible, so heavy filtering can't make it fetch forever
+  if(busy||!canFetch||(!force&&lastList.length===lastFetchAt))return;
+  lastFetchAt=lastList.length;pin();topUp();
 }
-new IntersectionObserver(es=>{if(es[0].isIntersecting)maybeMore()},{rootMargin:"1200px"}).observe($("more"));
-$("more").onclick=()=>maybeMore(true);
-$("sort").onchange=()=>{view.sort=$("sort").value;rerender()};
-$("artonly").onclick=()=>{view.art=!view.art;$("artonly").classList.toggle("on",view.art);view.limit=PAGE;rerender();topUp();};
-$("mins").querySelectorAll("button").forEach(b=>b.onclick=()=>{view.min=b.dataset.m;view.limit=PAGE;
-  $("mins").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));rerender();topUp();});
-$("orients").querySelectorAll("button").forEach(b=>b.onclick=()=>{view.orient=b.dataset.o;view.limit=PAGE;
-  $("orients").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));rerender();topUp();});
+new IntersectionObserver(es=>{if(es[0].isIntersecting)maybeMore()},{rootMargin:NEAR+"px"}).observe($("more"));
+$("deeper").onclick=()=>maybeMore(true);
+["dpi","mode"].forEach(id=>$(id).addEventListener("change",()=>{showNeed();cardCache.clear();if(searched)resetView();})); // size lines depend on both
+$("lic").addEventListener("change",()=>{if(searched)resetView();});
+$("sort").onchange=()=>{view.sort=$("sort").value;resetView();};
+const press=(b,on)=>{b.classList.toggle("on",on);b.setAttribute("aria-pressed",on);};
+$("artonly").onclick=()=>{view.art=!view.art;press($("artonly"),view.art);resetView();};
+/* chip rows where exactly one chip is on */
+function chipGroup(id,key){$(id).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  view[key]=b.dataset.v;$(id).querySelectorAll("button").forEach(x=>press(x,x===b));resetView();});}
+chipGroup("orients","orient");chipGroup("mins","min");
 
 /* ---------- rendering ---------- */
+/* short licence wording for badges: "CC0" only when the item really is CC0 */
+const licLabel=it=>{const l=String(it.licence||"");return /cc0|cc-0|zero/i.test(l)?"CC0":/no known restrictions/i.test(l)?"No known restrictions":/public ?domain|^pd/i.test(l)?"Public domain":l||"Unknown";};
 function badgeHTML(it,o){
-  const f=fit(it,o);const src=SOURCES.find(s=>s.key===it.src);
-  return `<span class="b">${it.w.toLocaleString()}×${it.h.toLocaleString()}</span>`+
+  const f=fitOf(it,o);
+  return `<span class="b">${fmtPx(it)}</span>`+
     (o.mode==="cover"&&f.crop>3?`<span class="b warn">${f.crop}% crop</span>`:"")+
     (o.mode==="contain"&&f.crop>25?`<span class="b warn">fills ${100-f.crop}% of sheet</span>`:"")+
-    `<span class="b ${src.cc0?"ok":"warn"}">${src.cc0?"CC0":esc(it.licence)}</span>`;
+    `<span class="b ${SRC[it.src].vetted?"ok":"warn"}">${esc(licLabel(it))}</span>`;
 }
+function syncStar(c,id){
+  const b=c.querySelector(".star"),on=savedIds.has(id);
+  b.classList.toggle("on",on);b.textContent=on?"★ Saved":"☆ Save";b.setAttribute("aria-label",on?"Saved to a board: change boards":"Save to board");
+}
+function card(it,o){
+  const f=fitOf(it,o),d=document.createElement("div");d.className="card";d.dataset.id=it.id;
+  d.innerHTML=`<div class="thumb" role="button" tabindex="0" aria-label="${esc("Details: "+it.title)}"><img loading="lazy" alt="" src="${esc(it.thumb||"")}" referrerpolicy="no-referrer"><span class="nothumb" hidden>Preview blocked by the museum — open for details</span></div>
+  <div class="maxa" title="Largest A size at ${o.dpi} dpi (${f.eff} dpi at that size)">Max ${f.maxA}<span>${f.cmW.toFixed(0)} × ${f.cmH.toFixed(0)} cm</span></div>
+  <div class="meta"><div class="t">${esc(it.title)}</div>
+  <div class="a">${esc(it.artist||"Unknown")}${it.date?" · "+esc(it.date):""}</div>
+  <div class="a">${esc(it.provider||shortName(it.src))}</div>
+  <div class="badges">${badgeHTML(it,o)}</div>
+  <div class="acts"><button type="button" class="sim" title="Search again for this subject in the same medium">Similar</button><button type="button" class="star" aria-haspopup="dialog"></button></div></div>`;
+  syncStar(d,it.id);
+  const img=d.querySelector(".thumb img"),alts=[...(it.thumbAlt||[])];
+  img.onerror=()=>{if(alts.length)img.src=alts.shift();else{img.hidden=true;d.querySelector(".nothumb").hidden=false;}};
+  d.querySelector(".thumb").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDetail(it);}};
+  d.querySelector(".star").onclick=e=>{e.stopPropagation();boardPicker(it,e.currentTarget);};
+  d.querySelector(".sim").onclick=e=>{e.stopPropagation();similar(it);};
+  d.onclick=()=>openDetail(it);
+  return d;
+}
+const cardCache=new Map(); // id → card; cleared when dpi/layout change, because the size line depends on them
+function rerender(){
+  const o=cur(),base=filtered(o),list=visible(o,base),shown=list.slice(0,view.limit),g=$("grid");
+  lastList=list;
+  const cards=shown.map(it=>{let c=cardCache.get(it.id);if(c)syncStar(c,it.id);else{c=card(it,o);cardCache.set(it.id,c);}return c;});
+  // while scrolling the grid only grows: append; otherwise rebuild and keep keyboard focus where it was
+  if(g.children.length<=cards.length&&[...g.children].every((c,i)=>c===cards[i]))g.append(...cards.slice(g.children.length));
+  else{const f=document.activeElement;g.replaceChildren(...cards);if(f!==document.activeElement&&f?.isConnected)f.focus({preventScroll:true});}
+  const {busy,canFetch}=activity(o),stalled=!busy&&canFetch&&list.length<=view.limit&&list.length===lastFetchAt;
+  $("more").hidden=!searched||(!shown.length&&(busy||!canFetch));
+  $("moretxt").textContent=list.length>view.limit||busy?"Loading more…":stalled?"No new matches in the last batch.":canFetch?"Scroll for more":`All ${list.length.toLocaleString()} results shown`;
+  $("deeper").hidden=!stalled;
+  $("empty").hidden=shown.length>0;
+  if(!shown.length)$("empty").textContent=!searched?"Press Search to find printable images.":busy?"Searching…":canFetch?"Nothing printable in the first batches yet.":"Nothing printable here. Try a lower DPI, a smaller minimum size, broader keywords or another source.";
+  if(searched)statusLine(o,base);
+  requestAnimationFrame(()=>maybeMore());
+}
+
 /* ---------- similar: re-search by title words / artist, same medium and era (metadata only — no image matching) ---------- */
 const STOP=new Set("the a an and or of with in on at to for from by after before near under over into its his her their this that study sketch untitled plate page fol folio leaf no nr vol part view portrait detail recto verso design de la le les du des et van het een der den die und von il del della di".split(" "));
 function titleWords(it){
@@ -752,81 +869,47 @@ function titleWords(it){
 }
 // most specific first: "watercolour, painted borders" is a drawing, not a painting
 const mediumOf=it=>["photograph","print","drawing","painting"].find(k=>MED[k].re.test(it.medium||""))||"";
-// last capitalised word of the first credited name; none for "German 16th Century", "Unknown", workshops etc.
-const surname=a=>{const f=String(a||"").split(/[,;(]/)[0].trim();if(!f||/\d|century|school|workshop|circle|follower|manner|culture|unknown|anonymous|unidentified|various/i.test(f))return "";
-  const n=f.split(/\s+/).filter(w=>/^\p{Lu}/u.test(w));return n.length?n[n.length-1]:"";};
+// family name from the first credited name: "Pieter Bruegel the Elder" → Bruegel; none for "German 16th Century", "Unknown", workshops etc.
+const surname=a=>{
+  const f=String(a||"").split(/[,;(]/)[0].replace(/\s+(the\s+)?(elder|younger)$/i,"").replace(/\s+(jr|sr)\.?$/i,"").replace(/\s+[IVX]+$/,"").trim();
+  if(!f||/\d|century|school|workshop|circle|follower|manner|culture|unknown|anonymous|unidentified|various/i.test(f))return "";
+  const n=f.split(/\s+/).filter(w=>/^\p{Lu}/u.test(w));return n.length?n[n.length-1]:"";
+};
 function searchFor({q="",medium="",from=null,to=null}){
   $("q").value=q;$("medium").value=medium;$("from").value=from??"";$("to").value=to??"";
   if($("dlg").open)$("dlg").close();
-  run();scrollTo({top:0,behavior:"smooth"});
+  run();toResults();
 }
 function similar(it){
   const w=titleWords(it).sort((a,b)=>b.length-a.length)[0]||surname(it.artist)||"";
   searchFor({q:w,medium:mediumOf(it)}); // subject word + medium; era left open so it doesn't come back empty
 }
 
-function card(it,o){
-  const on=inAnyBoard(it.id);
-  const src=SOURCES.find(s=>s.key===it.src);
-  const d=document.createElement("div");d.className="card";d.dataset.id=it.id;
-  const f=fit(it,o);
-  d.innerHTML=`<div class="thumb"><img loading="lazy" alt="" src="${esc(it.thumb||"")}" referrerpolicy="no-referrer"><span class="nothumb" hidden>Preview blocked by the museum — click for details</span></div>
-  <div class="maxa" title="Largest A size at ${o.dpi} dpi (${f.eff} dpi at that size)">Max ${esc(f.maxA)}<span>${f.maxS.toFixed(0)} × ${f.maxL.toFixed(0)} cm</span></div>
-  <div class="meta"><div class="t"><button class="star ${on?"on":""}" title="Save to board">${on?"★":"☆"}</button><button class="sim" title="Search for similar items (same subject word, medium and era)">Similar</button>${esc(it.title)}</div>
-  <div class="a">${esc(it.artist||"Unknown")}${it.date?" · "+esc(it.date):""}</div>
-  <div class="a">${esc(it.provider||src.name.replace(/ \(300\+.*\)/,""))}</div>
-  <div class="badges">${badgeHTML(it,o)}</div></div>`;
-  const img=d.querySelector(".thumb img"),alts=[...(it.thumbAlt||[])];
-  img.onerror=()=>{if(alts.length)img.src=alts.shift();else{img.hidden=true;d.querySelector(".nothumb").hidden=false;}};
-  d.querySelector(".star").onclick=e=>{e.stopPropagation();boardPicker(it,e.currentTarget);};
-  d.querySelector(".sim").onclick=e=>{e.stopPropagation();similar(it);};
-  d.onclick=()=>openDetail(it);
-  return d;
-}
-const cardCache=new Map();
-function rerender(){
-  const o=opts();const g=$("grid");
-  const list=visible(o),shown=list.slice(0,view.limit);
-  const frag=document.createDocumentFragment();
-  // reuse built cards so images don't reload on every update; a card depends on dpi/mode via its size badge
-  shown.forEach(it=>{const k=it.id+"|"+o.dpi+"|"+o.mode;let c=cardCache.get(k);if(!c){c=card(it,o);cardCache.set(k,c);}frag.appendChild(c);});
-  g.replaceChildren(frag);
-  const busy=o.srcs.some(k=>state[k]?.busy), canFetch=o.srcs.some(k=>state[k]?.more&&!state[k]?.err);
-  $("more").hidden=!shown.length;
-  const stalled=!busy&&canFetch&&list.length<=view.limit&&results.length===lastFetchAt;
-  $("more").textContent=list.length>view.limit||busy?"Loading more…":stalled?"No new matches in the last batch — click to search deeper":canFetch?"Scroll for more":`All ${list.length.toLocaleString()} results shown`;
-  $("more").style.cursor=stalled?"pointer":"";
-  requestAnimationFrame(()=>maybeMore());
-  $("empty").hidden=shown.length>0;
-  if(!shown.length)$("empty").textContent=busy||!results.length&&canFetch?"Searching…":"Nothing printable here. Try a lower DPI, a smaller minimum size, broader keywords or another source.";
-  statusLine();
-}
-
 /* ---------- detail ---------- */
 function openDetail(it){
-  const o=opts(),f=fit(it,o),src=SOURCES.find(s=>s.key===it.src);
-  $("dbody").innerHTML=`<div class="dlg"><div class="dimg"><img src="${esc(it.preview||it.thumb)}" alt="" referrerpolicy="no-referrer"></div>
-  <div class="dinfo"><h2>${esc(it.title)}</h2><div class="a">${esc(it.artist||"Unknown")}</div>
+  const o=cur(),f=fitOf(it,o),src=SRC[it.src],cm=px=>(px/o.dpi*2.54).toFixed(0);
+  $("dbody").innerHTML=`<div class="dlg"><div class="dimg"><img src="${esc(it.preview||it.thumb||"")}" alt="${esc(it.title)}" referrerpolicy="no-referrer"></div>
+  <div class="dinfo"><h2 id="dtitle">${esc(it.title)}</h2><div class="a">${esc(it.artist||"Unknown")}</div>
   <table>
    <tr><td>Date</td><td>${esc(it.date||"—")}</td></tr>
    <tr><td>Medium</td><td>${esc(it.medium||"—")}</td></tr>
    <tr><td>Source</td><td>${esc(src.name)}${it.provider?" — "+esc(it.provider):""}</td></tr>
-   <tr><td>Licence</td><td>${esc(it.licence)}${src.cc0?"":" — <b>check the file page before selling</b>"}</td></tr>
-   <tr><td>Pixels</td><td>${it.w.toLocaleString()} × ${it.h.toLocaleString()} (${(it.w*it.h/1e6).toFixed(1)} MP)</td></tr>
-   <tr><td>Largest A size</td><td><b>${esc(f.maxA)}</b> at ${o.dpi} dpi (${o.mode==="cover"?"filling the sheet":"whole image"})</td></tr>
-   <tr><td>DPI at each size</td><td>${f.dpis.filter(x=>SIZES.indexOf(x.k)<=f.rank+1).map(x=>`${x.k} <span class="b ${x.dpi>=o.dpi?"ok":"bad"}">${x.dpi}</span>`).join(" ")}</td></tr>
+   <tr><td>Licence</td><td>${esc(it.licence)}${src.vetted?"":" — <b>check the file page before selling</b>"}</td></tr>
+   <tr><td>Pixels</td><td>${fmtPx(it)} (${(it.w*it.h/1e6).toFixed(1)} MP)</td></tr>
+   <tr><td>Largest A size</td><td><b>${f.maxA}</b> at ${o.dpi} dpi (${o.mode==="cover"?"filling the sheet":"whole image"})</td></tr>
+   <tr><td>DPI at each size</td><td><div class="dpis">${f.dpis.filter(x=>SIZES.indexOf(x.k)<=f.rank+1).map(x=>`<span>${x.k} <span class="b ${x.dpi>=o.dpi?"ok":"bad"}">${x.dpi} ${x.dpi>=o.dpi?"✓":"✗"}</span></span>`).join("")}</div></td></tr>
    <tr><td>Crop to fill an A sheet</td><td>${f.crop}%</td></tr>
-   <tr><td>Max size at ${o.dpi} dpi</td><td>${f.maxL.toFixed(0)} × ${f.maxS.toFixed(0)} cm</td></tr>
-   <tr><td>Find similar</td><td class="chips" id="simchips"></td></tr>
+   <tr><td>Size at ${o.dpi} dpi</td><td>${cm(it.w)} × ${cm(it.h)} cm</td></tr>
+   <tr><td>Find similar</td><td><div class="chips" id="simchips"></div></td></tr>
    <tr><td>Downloadable</td><td id="dl">${it.iiif?'<button class="btn ghost" id="chk" type="button">Check downloadable size</button>':"Full file from source"}</td></tr>
   </table>
   ${it.sizeNote?`<div class="note">${esc(it.sizeNote)}</div>`:""}
-  <div class="links"><a href="${esc(it.page)}" target="_blank" rel="noopener">Museum page ↗</a><a href="${esc(it.download)}" target="_blank" rel="noopener">Full-size file ↗</a>${it.downloadAlt?`<a href="${esc(it.downloadAlt)}" target="_blank" rel="noopener">JPEG version ↗</a>`:""}</div>
+  <div class="links"><a href="${esc(safeUrl(it.page))}" target="_blank" rel="noopener">Museum page ↗</a><a href="${esc(safeUrl(it.download))}" target="_blank" rel="noopener">Full-size file ↗</a>${it.downloadAlt?`<a href="${esc(safeUrl(it.downloadAlt))}" target="_blank" rel="noopener">JPEG version ↗</a>`:""}</div>
   <button class="btn ghost" id="pix" type="button">View 100% detail (pixel-peep)</button>
   <div id="cropbox"></div>
-  <button class="btn" id="sl" type="button">Save to board…</button>
+  <button class="btn" id="save" type="button" aria-haspopup="dialog">Save to board…</button>
   </div></div>`;
-  $("sl").onclick=e=>boardPicker(it,e.currentTarget);
+  $("save").onclick=e=>boardPicker(it,e.currentTarget);
   { // one chip per title word, the artist, and a broad "same medium & era" search
     const m=mediumOf(it),era=it.year?{from:it.year-30,to:it.year+30}:{},sn=surname(it.artist),box=$("simchips");
     const chip=(label,args)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=label;b.onclick=()=>searchFor(args);box.appendChild(b);};
@@ -835,126 +918,161 @@ function openDetail(it){
     if(m||it.year)chip(`any ${m||"work"}${it.year?` ${era.from}–${era.to}`:""}`,{medium:m,...era});
   }
   if($("chk"))$("chk").onclick=async()=>{
-    $("dl").textContent="Checking…";
-    try{const d=await getJSON(it.iiif+"/info.json");
-      const mw=d.maxWidth||d.profile?.[1]?.maxWidth, mh=d.maxHeight||d.profile?.[1]?.maxHeight, ma=d.maxArea||d.profile?.[1]?.maxArea;
-      let w=d.width,h=d.height;
+    const cell=$("dl");cell.textContent="Checking…"; // the dialog may show another item by the time the answer arrives
+    try{const d=await getJSON(it.iiif+"/info.json");if(!cell.isConnected)return;
+      // IIIF size limits: a maxWidth on its own also caps the height
+      const p=d.profile?.[1]||{},mw=d.maxWidth||p.maxWidth,mh=d.maxHeight||p.maxHeight||mw,ma=d.maxArea||p.maxArea;
+      let w=+d.width,h=+d.height;if(!(w>0&&h>0))throw new Error("no size given");
       if(mw&&w>mw){h=Math.round(h*mw/w);w=mw}
       if(mh&&h>mh){w=Math.round(w*mh/h);h=mh}
       if(ma&&w*h>ma){const s=Math.sqrt(ma/(w*h));w=Math.floor(w*s);h=Math.floor(h*s)}
       const g=fit({w,h},o);
-      $("dl").innerHTML=`${w.toLocaleString()} × ${h.toLocaleString()} → <span class="b ${g.pass?"ok":"bad"}">${g.pass?"max "+g.maxA:"below A4"} at ${o.dpi} dpi</span>`;
-    }catch(e){$("dl").textContent="Couldn't check ("+e.message+")";}
+      cell.innerHTML=`${fmtPx({w,h})} → <span class="b ${g.pass?"ok":"bad"}">${g.pass?"max "+g.maxA:"below A4"} at ${o.dpi} dpi</span>`;
+    }catch(e){if(cell.isConnected)cell.textContent="Couldn't check ("+e.message+")";}
   };
   $("pix").onclick=()=>{
     const box=$("cropbox");let url=null;
-    if(it.iiif){const cw=1000,ch=700,x=Math.max(0,Math.round(it.w/2-cw/2)),y=Math.max(0,Math.round(it.h/2-ch/2));url=`${it.iiif}/${x},${y},${cw},${ch}/full/0/default.jpg`;}
+    if(it.iiif){ // a 1000×700 crop from the centre at full resolution; size "w," works on IIIF v2 and v3 servers
+      const cw=Math.min(1000,it.w),ch=Math.min(700,it.h),x=Math.round((it.w-cw)/2),y=Math.round((it.h-ch)/2);
+      url=`${it.iiif}/${x},${y},${cw},${ch}/${cw},/0/default.jpg`;}
     else if(["wm","met","si","mia"].includes(it.src)&&/\.(jpe?g|png)$/i.test(it.download))url=it.download;
     else if(it.src==="cma"&&it.downloadAlt){box.innerHTML='<div class="note">Cleveland\'s full file is a TIFF (not viewable in a browser). Open the JPEG version and zoom in instead.</div>';return;}
     if(!url){box.innerHTML='<div class="note">No 100% view available for this source.</div>';return;}
-    box.innerHTML=`<div class="crop" id="cr"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer"></div><div class="note">Actual pixels from the centre of the image. At ${o.dpi} dpi, ${o.dpi} of these pixels = 1 inch of print. Look for blur, JPEG blocks and halftone dots.</div>`;
+    box.innerHTML=`<div class="crop" id="cr"><img src="${esc(url)}" alt="Detail at actual pixels" referrerpolicy="no-referrer"></div><div class="note">Actual pixels from the centre of the image. At ${o.dpi} dpi, ${o.dpi} of these pixels = 1 inch of print. Look for blur, JPEG blocks and halftone dots.</div>`;
     const img=box.querySelector("img");img.onload=()=>{const c=$("cr");if(!it.iiif){c.scrollLeft=(img.naturalWidth-c.clientWidth)/2;c.scrollTop=(img.naturalHeight-c.clientHeight)/2;}};
     img.onerror=()=>{box.innerHTML='<div class="note">The server refused the detail crop — open the full-size file instead.</div>'};
   };
   $("dlg").showModal();
 }
-$("close").onclick=()=>$("dlg").close();
-$("dlg").addEventListener("click",e=>{if(e.target===$("dlg"))$("dlg").close()});
+$("dclose").onclick=()=>$("dlg").close();
+$("pclose").onclick=()=>$("panel").close();
+["dlg","panel"].forEach(id=>{const d=$(id);
+  d.addEventListener("click",e=>{if(e.target===d)d.close()}); // click on the backdrop
+  d.addEventListener("cancel",e=>{if(!$("bpop").hidden){e.preventDefault();closePop();}}); // Esc closes the board picker first
+  d.addEventListener("close",()=>closePop(false));
+});
 
 /* ---------- boards ---------- */
-const snap=it=>({id:it.id,src:it.src,title:it.title,artist:it.artist,date:it.date,w:it.w,h:it.h,thumb:it.thumb,page:it.page,download:it.download,licence:it.licence});
-function refreshStars(id){
-  const on=inAnyBoard(id);
-  document.querySelectorAll(`.card[data-id="${CSS.escape(id)}"] .star`).forEach(c=>{c.classList.toggle("on",on);c.textContent=on?"★":"☆";});
-  updateShortBtn();
-}
-function newBoard(name){const b={id:"b"+Date.now()+Math.random().toString(36).slice(2,6),name:name.trim()||"Untitled board",items:[]};boards.push(b);saveBoards();return b;}
-/* small menu next to the clicked button: tick boards to add/remove the item, or create a new one */
-function boardPicker(it,anchor){
-  const pop=$("bpop");
-  const draw=()=>{
-    pop.innerHTML=`<b>Save to board</b>${boards.map(b=>`<label><input type="checkbox" data-b="${b.id}" ${b.items.some(x=>x.id===it.id)?"checked":""}> ${esc(b.name)} <span class="note">(${b.items.length})</span></label>`).join("")||'<span class="note">No boards yet — create one:</span>'}
-      <div class="new"><input type="text" placeholder="New board name" maxlength="60"><button class="btn" type="button">Add</button></div>`;
-    pop.querySelectorAll("[data-b]").forEach(cb=>cb.onchange=()=>{
-      const b=boards.find(x=>x.id===cb.dataset.b);
-      if(cb.checked){if(!b.items.some(x=>x.id===it.id))b.items.push(snap(it));}else b.items=b.items.filter(x=>x.id!==it.id);
-      saveBoards();refreshStars(it.id);draw();});
-    const inp=pop.querySelector(".new input"),add=()=>{if(!inp.value.trim())return inp.focus();const b=newBoard(inp.value);b.items.push(snap(it));saveBoards();refreshStars(it.id);draw();};
-    pop.querySelector(".new button").onclick=add;inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();add();}};
-  };
-  draw();
-  // show inside an open dialog so it isn't hidden behind the modal layer
-  const host=anchor.closest("dialog")||document.body;if(pop.parentNode!==host)host.appendChild(pop);
-  pop.hidden=false;
-  const r=anchor.getBoundingClientRect(),pw=pop.offsetWidth,ph=pop.offsetHeight;
+/* what a board keeps of an item; also cleans items read from imported backups */
+const snap=x=>({id:String(x.id),src:String(x.src||""),title:String(x.title||"Untitled"),artist:String(x.artist||""),date:String(x.date||""),w:+x.w||0,h:+x.h||0,
+  thumb:String(x.thumb||""),page:String(x.page||""),download:String(x.download||""),licence:String(x.licence||"")});
+function updateBoardsBtn(){$("boardsbtn").textContent=`Boards (${boards.length})${savedIds.size?" · "+savedIds.size+" saved":""}`;}
+function refreshStars(id){const c=cardCache.get(id);if(c)syncStar(c,id);updateBoardsBtn();}
+function newBoard(name){const b={id:newId(),name:name.trim().slice(0,60)||"Untitled board",items:[]};boards.push(b);saveBoards();return b;}
+let popFor=null; // the button the board picker belongs to
+function closePop(refocus=true){const pop=$("bpop");if(pop.hidden)return;pop.hidden=true;if(refocus&&popFor?.isConnected)popFor.focus();popFor=null;}
+function placePop(){
+  const pop=$("bpop"),r=popFor.getBoundingClientRect();
+  if(r.bottom<0||r.top>innerHeight){closePop(false);return;} // its button has scrolled away
+  const pw=pop.offsetWidth,ph=pop.offsetHeight;
   pop.style.left=Math.max(8,Math.min(innerWidth-pw-8,r.right-pw))+"px";
   pop.style.top=(r.bottom+6+ph>innerHeight?Math.max(8,r.top-ph-6):r.bottom+6)+"px";
 }
-// composedPath still includes the popover when the clicked element was replaced by a redraw
-document.addEventListener("click",e=>{const pop=$("bpop");if(!pop.hidden&&!e.composedPath().includes(pop)&&!e.target.closest(".star,#sl"))pop.hidden=true;});
-document.addEventListener("keydown",e=>{if(e.key==="Escape")$("bpop").hidden=true;});
-function updateShortBtn(){const n=boards.reduce((a,b)=>a+b.items.length,0);$("shortlist").textContent=`Boards (${boards.length})${n?" · "+n+" saved":""}`;}
-updateShortBtn();
+/* small menu next to the clicked button: tick boards to add/remove the item, or name a new one */
+function boardPicker(it,anchor){
+  const pop=$("bpop");
+  if(!pop.hidden&&popFor===anchor){closePop();return;} // a second click on the same button closes it
+  popFor=anchor;
+  const draw=focus=>{
+    pop.innerHTML=`<b>Save to board</b>${boards.map(b=>`<label><input type="checkbox" data-b="${b.id}" ${b.items.some(x=>x.id===it.id)?"checked":""}> ${esc(b.name)} <span class="note">(${b.items.length})</span></label>`).join("")||'<span class="note">No boards yet — name one:</span>'}
+      <div class="new"><input type="text" aria-label="New board name" placeholder="New board name" maxlength="60"><button class="btn" type="button">Add</button></div>`;
+    pop.querySelectorAll("[data-b]").forEach(cb=>cb.onchange=()=>{
+      const b=boards.find(x=>x.id===cb.dataset.b);
+      if(cb.checked){if(!b.items.some(x=>x.id===it.id))b.items.push(snap(it));}else b.items=b.items.filter(x=>x.id!==it.id);
+      saveBoards();refreshStars(it.id);draw(b.id);});
+    const inp=pop.querySelector(".new input"),add=()=>{if(!inp.value.trim())return inp.focus();const b=newBoard(inp.value);b.items.push(snap(it));saveBoards();refreshStars(it.id);draw(b.id);};
+    pop.querySelector(".new button").onclick=add;inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();add();}};
+    (pop.querySelector(`[data-b="${focus}"]`)||pop.querySelector("input"))?.focus({preventScroll:true});
+    placePop();
+  };
+  // inside an open dialog the picker has to live in that dialog, or the modal layer covers it
+  const host=anchor.closest("dialog")||document.body;if(pop.parentNode!==host)host.appendChild(pop);
+  pop.hidden=false;draw();
+}
+// composedPath still includes the picker when the clicked element was replaced by a redraw
+document.addEventListener("click",e=>{const p=e.composedPath();if(!$("bpop").hidden&&!p.includes($("bpop"))&&!p.includes(popFor))closePop(false);});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("bpop").hidden){e.preventDefault();closePop();}});
+document.addEventListener("scroll",e=>{if(!$("bpop").hidden&&!$("bpop").contains(e.target))placePop();},true);
+addEventListener("resize",()=>{if(!$("bpop").hidden)placePop();});
+/* boards changed in another tab of this site: take them over, so neither tab overwrites the other */
+addEventListener("storage",e=>{
+  if(e.key!=="pf_boards")return;
+  boards=loadBoards();countSaved();cardCache.forEach((c,id)=>syncStar(c,id));updateBoardsBtn();
+  if($("panel").open&&$("ptitle")?.textContent==="Boards")showBoards();
+});
+updateBoardsBtn();
 let curBoard=null;
-function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();}
-function showBoards(){
+function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);}
+const csvCell=v=>{let s=String(v??"");if(/^[=+\-@]/.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`;}; // a leading ' stops spreadsheets running it as a formula
+function showBoards(msg=""){
   if(!boards.some(b=>b.id===curBoard))curBoard=boards[0]?.id||null;
-  const b=boards.find(x=>x.id===curBoard),o=opts();
-  $("sbody").innerHTML=`<h2>Boards</h2>
-  <p class="note">Saved in this browser only — use Backup now and then, and Import to move boards to another device.</p>
-  <div class="bpills">${boards.map(x=>`<button type="button" class="chip ${x.id===curBoard?"on":""}" data-pick="${x.id}">${esc(x.name)} (${x.items.length})</button>`).join("")}
+  const b=boards.find(x=>x.id===curBoard),o=cur();
+  $("pbody").innerHTML=`<h2 id="ptitle">Boards</h2>
+  <p class="note">Saved in this browser only. Use Backup now and then, and Import to move boards to another device.</p>
+  <div class="bpills">${boards.map(x=>`<button type="button" class="chip ${x.id===curBoard?"on":""}" aria-pressed="${x.id===curBoard}" data-pick="${x.id}">${esc(x.name)} (${x.items.length})</button>`).join("")}
     <button type="button" class="chip" id="bnew">＋ New board</button></div>
+  <form class="new" id="bnewrow" hidden><input type="text" aria-label="New board name" placeholder="New board name" maxlength="60"><button class="btn">Create</button><button class="btn ghost" type="button" data-cancel>Cancel</button></form>
   ${b?`<div class="links"><button class="btn ghost" type="button" id="bren">Rename</button><button class="btn ghost" type="button" id="bdel">Delete board</button>${b.items.length?'<button class="btn ghost" type="button" id="csv">Download CSV</button>':""}</div>
-  ${b.items.length?`<div class="bgrid">${b.items.map((x,i)=>{const f=fit(x,o);return `<div class="bitem"><img src="${esc(x.thumb)}" alt="" referrerpolicy="no-referrer" loading="lazy"><div><b>${esc(x.title)}</b><span class="note">${esc(x.artist||"")}</span><span>${f.pass?"Max "+f.maxA:"Below A4"} · ${x.w}×${x.h}</span><span><a href="${esc(x.page)}" target="_blank" rel="noopener">page</a> · <a href="${esc(x.download)}" target="_blank" rel="noopener">file</a> · <a href="#" data-rm="${i}">remove</a></span></div></div>`}).join("")}</div>`
-    :'<p class="note">Empty. Click ☆ on any result to save it here.</p>'}`
-  :'<p class="note">No boards yet. Create one here, or click ☆ on any result.</p>'}
-  <div class="links" style="margin-top:8px"><button class="btn ghost" type="button" id="bexp">Backup all boards</button><button class="btn ghost" type="button" id="bimp">Import backup</button><input type="file" id="bfile" accept=".json,application/json" hidden></div>`;
-  const S=$("sbody");
-  S.querySelectorAll("[data-pick]").forEach(x=>x.onclick=()=>{curBoard=x.dataset.pick;showBoards();});
-  $("bnew").onclick=()=>{const n=prompt("Board name");if(n==null)return;curBoard=newBoard(n).id;updateShortBtn();showBoards();};
+  <form class="new" id="brenrow" hidden><input type="text" aria-label="Board name" maxlength="60" value="${esc(b.name)}"><button class="btn">Save</button><button class="btn ghost" type="button" data-cancel>Cancel</button></form>
+  ${b.items.length?`<div class="bgrid">${b.items.map((x,i)=>{const f=fitOf(x,o);return `<div class="bitem"><img src="${esc(x.thumb)}" alt="" referrerpolicy="no-referrer" loading="lazy"><div><b>${esc(x.title)}</b><span class="note">${esc(x.artist)}</span><span>${f.pass?"Max "+f.maxA:"Below A4"} · ${fmtPx(x)}</span><span><a href="${esc(safeUrl(x.page))}" target="_blank" rel="noopener">page</a> · <a href="${esc(safeUrl(x.download))}" target="_blank" rel="noopener">file</a> · <button type="button" class="linkbtn" data-rm="${i}">remove</button></span></div></div>`}).join("")}</div>`
+    :'<p class="note">Empty. Use ☆ Save on any result to add it here.</p>'}`
+  :'<p class="note">No boards yet. Create one here, or use ☆ Save on any result.</p>'}
+  <div class="links"><button class="btn ghost" type="button" id="bexp">Backup all boards</button><button class="btn ghost" type="button" id="bimp">Import backup</button><input type="file" id="bfile" accept=".json,application/json" hidden></div>
+  ${msg?`<p class="note" role="status">${esc(msg)}</p>`:""}`;
+  const P=$("pbody"),reveal=id=>{const r=$(id),i=r.querySelector("input");r.hidden=false;i.focus();i.select();};
+  P.querySelectorAll("[data-pick]").forEach(x=>x.onclick=()=>{curBoard=x.dataset.pick;showBoards();});
+  P.querySelectorAll("[data-cancel]").forEach(x=>x.onclick=()=>{x.closest("form").hidden=true;});
+  $("bnew").onclick=()=>reveal("bnewrow");
+  $("bnewrow").onsubmit=e=>{e.preventDefault();const v=e.target.querySelector("input").value;if(!v.trim())return;curBoard=newBoard(v).id;updateBoardsBtn();showBoards();};
   if(b){
-    $("bren").onclick=()=>{const n=prompt("Rename board",b.name);if(n&&n.trim()){b.name=n.trim();saveBoards();showBoards();}};
-    $("bdel").onclick=()=>{if(!confirm(`Delete "${b.name}" and its ${b.items.length} saved items?`))return;boards=boards.filter(x=>x!==b);saveBoards();b.items.forEach(x=>refreshStars(x.id));updateShortBtn();showBoards();};
-    S.querySelectorAll("[data-rm]").forEach(a=>a.onclick=e=>{e.preventDefault();const [x]=b.items.splice(+a.dataset.rm,1);saveBoards();refreshStars(x.id);showBoards();});
+    $("bren").onclick=()=>reveal("brenrow");
+    $("brenrow").onsubmit=e=>{e.preventDefault();const v=e.target.querySelector("input").value.trim();if(v){b.name=v.slice(0,60);saveBoards();}showBoards();};
+    $("bdel").onclick=()=>{if(!confirm(`Delete "${b.name}" and its ${b.items.length} saved items?`))return;boards=boards.filter(x=>x!==b);saveBoards();b.items.forEach(x=>refreshStars(x.id));showBoards(`Deleted "${b.name}".`);};
+    P.querySelectorAll("[data-rm]").forEach(a=>a.onclick=()=>{const [x]=b.items.splice(+a.dataset.rm,1);saveBoards();refreshStars(x.id);showBoards();});
     if($("csv"))$("csv").onclick=()=>{
       const head=["title","artist","date","width_px","height_px","licence","source","page","download"];
-      download(b.name.replace(/[^\w-]+/g,"-")+".csv",[head.join(",")].concat(b.items.map(x=>[x.title,x.artist,x.date,x.w,x.h,x.licence,x.src,x.page,x.download].map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","))).join("\n"),"text/csv");
+      const rows=b.items.map(x=>[x.title,x.artist,x.date,x.w,x.h,x.licence,x.src,x.page,x.download].map(csvCell).join(","));
+      download((b.name.replace(/[^\w-]+/g,"-").replace(/^-+|-+$/g,"")||"board")+".csv","﻿"+[head.join(","),...rows].join("\n"),"text/csv;charset=utf-8"); // BOM: Excel reads accents correctly
     };
   }
   $("bexp").onclick=()=>download("print-finder-boards.json",JSON.stringify({version:1,boards},null,1),"application/json");
   $("bimp").onclick=()=>$("bfile").click();
   $("bfile").onchange=async()=>{
-    try{const d=JSON.parse(await $("bfile").files[0].text());const inc=arr(d.boards).filter(x=>x&&x.name&&Array.isArray(x.items));
-      if(!inc.length)throw new Error("no boards in file");
-      // merge: same-named boards gain the missing items, others are added
-      for(const x of inc){const t=boards.find(y=>y.name===x.name);if(t)x.items.forEach(i=>{if(i.id&&!t.items.some(z=>z.id===i.id))t.items.push(i)});else boards.push({id:"b"+Date.now()+Math.random().toString(36).slice(2,6),name:x.name,items:x.items.filter(i=>i.id)});}
-      saveBoards();updateShortBtn();document.querySelectorAll(".card").forEach(c=>refreshStars(c.dataset.id));showBoards();alert(`Imported ${inc.length} board(s).`);
-    }catch(e){alert("Couldn't import: "+e.message);}
+    let inc;
+    try{const d=JSON.parse(await $("bfile").files[0].text());
+      // check and clean everything first, so a bad file changes nothing
+      inc=arr(d?.boards).filter(x=>x&&typeof x.name==="string"&&Array.isArray(x.items))
+        .map(x=>({name:x.name.slice(0,60),items:[...new Map(x.items.filter(i=>i&&i.id!=null).map(i=>[String(i.id),snap(i)])).values()]}));
+      if(!inc.length)throw new Error("no boards found in that file");
+    }catch(e){showBoards("Couldn't import: "+e.message);return;}
+    // merge: a board with the same name gains the items it lacks; other boards are added
+    for(const x of inc){const t=boards.find(y=>y.name===x.name);
+      if(t)x.items.forEach(i=>{if(!t.items.some(z=>z.id===i.id))t.items.push(i)});else boards.push({id:newId(),...x});}
+    saveBoards();cardCache.forEach((c,id)=>syncStar(c,id));updateBoardsBtn();showBoards(`Imported ${inc.length} board${inc.length>1?"s":""}.`);
   };
-  if(!$("sdlg").open)$("sdlg").showModal();
+  if(!$("panel").open)$("panel").showModal();
 }
-$("shortlist").onclick=showBoards;
-$("sclose").onclick=()=>$("sdlg").close();
+$("boardsbtn").onclick=()=>showBoards();
 
 /* ---------- self-test: one small live search per source, run from the viewer's browser ---------- */
 const imgOK=url=>new Promise(res=>{if(!url)return res(false);const i=new Image();i.referrerPolicy="no-referrer";
   const t=setTimeout(()=>res(false),15000);i.onload=()=>{clearTimeout(t);res(true)};i.onerror=()=>{clearTimeout(t);res(false)};i.src=url;});
 $("selftest").onclick=async()=>{
-  const o={q:"flower",medium:"",from:null,to:null,dpi:150,mode:"contain",needS:1240,needL:1754};
-  $("sbody").innerHTML=`<h2>Source test</h2><p class="note">One small search for “flower” per source, run from this browser. “Blocked” usually means the museum doesn't allow websites to call its API (CORS).</p><table id="tt">${SOURCES.map(s=>`<tr><td>${esc(s.name)}</td><td id="tt-${s.key}">Testing…</td></tr>`).join("")}</table>`;
-  if(!$("sdlg").open)$("sdlg").showModal();
+  const o={q:"flower",medium:"",from:null,to:null,dpi:150,mode:"contain",lic:"all"};
+  $("pbody").innerHTML=`<h2 id="ptitle">Source test</h2><p class="note">One small search for “flower” per source, run from this browser. “Blocked” usually means the museum doesn't allow websites to call its API (CORS).</p><table id="tt">${SOURCES.map(s=>`<tr><td>${esc(s.name)}</td><td id="tt-${s.key}">Testing…</td></tr>`).join("")}</table>`;
+  if(!$("panel").open)$("panel").showModal();
   await Promise.all(SOURCES.map(async s=>{
-    const cell=()=>$("tt-"+s.key);const t0=performance.now();
+    const cell=()=>$("tt-"+s.key),t0=performance.now();
     try{
       const r=await adapters[s.key](o,0,false,{});
-      const secs=((performance.now()-t0)/1000).toFixed(1);
-      const it=r.items[0];
+      const secs=((performance.now()-t0)/1000).toFixed(1),it=r.items[0];
+      if(!cell())return; // the panel was reused meanwhile
       if(!it){cell().innerHTML=`<span class="b warn">Reached, but 0 results</span> <span class="note">${secs}s</span>`;return;}
       const thumb=await imgOK(it.thumb);
       let iiif="";
       if(it.iiif){try{await getJSON(it.iiif+"/info.json",15000);iiif=' <span class="b ok">size check OK</span>'}catch(e){iiif=` <span class="b warn">size check: ${esc(e.message)}</span>`}}
-      cell().innerHTML=`<span class="b ok">Works</span> ${r.items.length} results · <span class="note">${secs}s</span>${thumb?"":' <span class="b warn">thumbnail failed</span>'}${iiif}<br><span class="note">e.g. ${esc(it.title)} — ${it.w}×${it.h}</span>`;
-    }catch(e){cell().innerHTML=`<span class="b bad">Failed</span> ${esc(e.message)}`;}
+      if(cell())cell().innerHTML=`<span class="b ok">Works</span> ${r.items.length} results · <span class="note">${secs}s</span>${thumb?"":' <span class="b warn">thumbnail failed</span>'}${iiif}<br><span class="note">e.g. ${esc(it.title)} — ${fmtPx(it)}</span>`;
+    }catch(e){if(cell())cell().innerHTML=`<span class="b bad">Failed</span> ${esc(e.message)}`;}
   }));
 };
 </script>
