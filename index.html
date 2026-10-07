@@ -359,11 +359,12 @@ const adapters={
     return {items,more:false};
   },
 
-  /* Europeana: aggregator. Search pre-filters to >4 MP open images; exact pixel size comes from each record */
+  /* Europeana: aggregator. Search pre-filters to >4 MP public-domain images; exact pixel size comes from each record */
   async eu(o,page,_,st){
     const key=$("eukey").value.trim()||"api2demo";
-    const p=new URLSearchParams({wskey:key,query:(o.q||"*")+(o.medium?" "+MED[o.medium].kw:""),rows:"24",cursor:st.cursor||"*",media:"true",reusability:"open",profile:"rich"});
-    p.append("qf","TYPE:IMAGE");p.append("qf","IMAGE_SIZE:extra_large");
+    const p=new URLSearchParams({wskey:key,query:(o.q||"*")+(o.medium?" "+MED[o.medium].kw:""),rows:"24",cursor:st.cursor||"*",media:"true",profile:"rich"});
+    // "reusability=open" also admits CC BY / BY-SA, which can fill whole pages; ask for PD/CC0 only
+    p.append("qf","TYPE:IMAGE");p.append("qf","IMAGE_SIZE:extra_large");p.append("qf","RIGHTS:*publicdomain*");
     if(o.from!=null||o.to!=null)p.append("qf",`YEAR:[${o.from??0} TO ${o.to??2100}]`);
     const d=await getJSON("https://api.europeana.eu/record/v2/search.json?"+p);
     st.cursor=d.nextCursor;
