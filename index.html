@@ -83,7 +83,7 @@ td:first-child{color:var(--muted);width:42%}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches 9 open-access collections and keeps only public domain images with enough pixels for your print size.</p>
+  <p class="sub">Searches 10 open-access collections and keeps only public domain images with enough pixels for your print size.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -103,7 +103,7 @@ td:first-child{color:var(--muted);width:42%}
     <button class="btn" type="submit" id="go">Search</button>
   </div>
   <div class="srcs" id="srcs"></div>
-  <details class="note"><summary>Settings</summary><div class="row" style="margin-top:8px"><label>Europeana key — only needed if Europeana starts failing (free from pro.europeana.eu)<input id="eukey" type="text" value="api2demo" style="width:220px"></label><button class="btn ghost" type="button" id="selftest">Test all sources</button></div></details>
+  <details class="note"><summary>Settings</summary><div class="row" style="margin-top:8px"><label>Europeana key — only needed if Europeana starts failing (free from pro.europeana.eu)<input id="eukey" type="text" value="api2demo" style="width:220px"></label><label>Smithsonian key — the shared DEMO_KEY allows ~10 searches an hour (free key: api.data.gov/signup)<input id="sikey" type="text" value="DEMO_KEY" style="width:220px"></label><button class="btn ghost" type="button" id="selftest">Test all sources</button></div></details>
   <div class="need" id="need"></div>
 </form>
 <div id="status"></div>
@@ -137,6 +137,7 @@ const SOURCES=[
   {key:"aic",name:"Art Institute of Chicago",cc0:true},
   {key:"met",name:"The Met (New York)",cc0:true},
   {key:"getty",name:"Getty Museum (Los Angeles)",cc0:true},
+  {key:"si",name:"Smithsonian (19 museums)",cc0:true},
   {key:"smk",name:"SMK (Denmark)",cc0:true},
   {key:"eu",name:"Europeana (300+ European museums)",cc0:true},
   {key:"wm",name:"Wikimedia Commons",cc0:false}
@@ -409,6 +410,27 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
     return {items,more:rows.length===24};
   },
 
+  /* Smithsonian Open Access: search results already carry CC0 status and pixel size of each high-res JPEG */
+  async si(o,page){
+    const key=$("sikey").value.trim()||"DEMO_KEY";
+    const p=new URLSearchParams({q:(o.q||"*")+" AND online_media_type:Images AND media_usage:CC0",start:String(page*100),rows:"100",api_key:key});
+    const d=await getJSON("https://api.si.edu/openaccess/api/v1.0/search?"+p);
+    const rows=d.response?.rows||[];
+    const items=rows.map(r=>{
+      const c=r.content||{},dn=c.descriptiveNonRepeating||{},ft=c.freetext||{};
+      const best=arr(dn.online_media?.media).filter(m=>m.usage?.access==="CC0").map(m=>({m,j:arr(m.resources).find(x=>x.label==="High-resolution JPEG"&&x.width)}))
+        .filter(x=>x.j).sort((a,b)=>b.j.width*b.j.height-a.j.width*a.j.height)[0];
+      if(!best)return null;
+      const date=arr(ft.date)[0]?.content||"";
+      const thumb=best.m.thumbnail||best.m.content;
+      return {id:"si-"+r.id,src:"si",title:r.title||dn.title?.content||"Untitled",artist:arr(ft.name).map(x=>x.content).filter(Boolean).slice(0,2).join(", "),
+        year:yearOf(date),date,medium:[...arr(ft.objectType).map(x=>x.content),...arr(ft.physicalDescription).map(x=>x.content)].filter(Boolean).join(" · "),
+        w:+best.j.width,h:+best.j.height,thumb:thumb+"&max=400",preview:thumb+"&max=1200",page:dn.record_link||dn.guid,download:best.j.url,
+        licence:"CC0",licOk:true,clientMedium:true,clientEra:true,provider:dn.data_source};
+    }).filter(Boolean);
+    return {items,more:(page+1)*100<(d.response?.rowCount||0)};
+  },
+
   /* National Gallery of Art: searched locally from the open-data index (nga-index.js) */
   async nga(o,page,_,st){
     await loadNGA();
@@ -523,7 +545,7 @@ function topUp(){
 }
 let rq=0;function scheduleRender(){if(!rq)rq=requestAnimationFrame(()=>{rq=0;rerender()})}
 function run(){
-  const o=opts();store.set("pf_form",{q:o.q,medium:o.medium,from:$("from").value,to:$("to").value,paper:o.paper,dpi:String(o.dpi),mode:o.mode,lic:$("lic").value,eukey:$("eukey").value});
+  const o=opts();store.set("pf_form",{q:o.q,medium:o.medium,from:$("from").value,to:$("to").value,paper:o.paper,dpi:String(o.dpi),mode:o.mode,lic:$("lic").value,eukey:$("eukey").value,sikey:$("sikey").value});
   showNeed();runId++;results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;
   o.srcs.forEach(k=>state[k]={page:0,more:true,rounds:0});
   $("grid").innerHTML="";$("more").hidden=true;$("tools").hidden=false;
@@ -613,7 +635,7 @@ function openDetail(it){
   $("pix").onclick=()=>{
     const box=$("cropbox");let url=null;
     if(it.iiif){const cw=1000,ch=700,x=Math.max(0,Math.round(it.w/2-cw/2)),y=Math.max(0,Math.round(it.h/2-ch/2));url=`${it.iiif}/${x},${y},${cw},${ch}/full/0/default.jpg`;}
-    else if((it.src==="wm"||it.src==="met")&&/\.(jpe?g|png)$/i.test(it.download))url=it.download;
+    else if(["wm","met","si"].includes(it.src)&&/\.(jpe?g|png)$/i.test(it.download))url=it.download;
     else if(it.src==="cma"&&it.downloadAlt){box.innerHTML='<div class="note">Cleveland\'s full file is a TIFF (not viewable in a browser). Open the JPEG version and zoom in instead.</div>';return;}
     if(!url){box.innerHTML='<div class="note">No 100% view available for this source.</div>';return;}
     box.innerHTML=`<div class="crop" id="cr"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer"></div><div class="note">Actual pixels from the centre of the image. At ${o.dpi} dpi, ${o.dpi} of these pixels = 1 inch of print. Look for blur, JPEG blocks and halftone dots.</div>`;
