@@ -53,10 +53,11 @@ button.st:hover{border-color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,calc(50% - 7px)),1fr));gap:14px} /* two columns on phones */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer}
 .card:hover,.card:focus-within{border-color:var(--muted)}
-.thumb{aspect-ratio:1/1;background:var(--chip);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.thumb{aspect-ratio:1/1;background:var(--chip);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .thumb:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .thumb img{max-width:100%;max-height:100%;object-fit:contain}
-.nothumb{color:var(--muted);font-size:12px;padding:16px;text-align:center}
+.nothumb{position:absolute;left:8px;right:8px;bottom:8px;background:var(--panel);color:var(--muted);border-radius:6px;font-size:12px;padding:6px 8px;text-align:center}
+img.lqip{width:100%;height:100%;max-height:none;object-fit:contain;filter:blur(7px);opacity:.9} /* the museum's tiny colour sketch, when its server blocks the real preview */
 .maxa{padding:8px 12px 0;font:600 17px/1.2 Georgia,"Times New Roman",serif;display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px}
 .maxa span{font:12px/1.2 ui-sans-serif,system-ui,sans-serif;color:var(--muted)}
 .meta{padding:6px 12px 12px;display:grid;gap:6px;font-size:13px;flex:1;align-content:start}
@@ -422,7 +423,8 @@ const adapters={
     const items=(d.data||[]).filter(a=>a.image_id&&a.thumbnail?.width).map(a=>({
       id:"aic-"+a.id,src:"aic",title:a.title,artist:a.artist_title||"",year:a.date_start,date:a.date_display||"",
       medium:[a.artwork_type_title,a.medium_display].filter(Boolean).join(" · "),w:a.thumbnail.width,h:a.thumbnail.height,
-      thumb:`${iiif}/${a.image_id}/full/400,/0/default.jpg`,thumbAlt:[`${iiif}/${a.image_id}/full/843,/0/default.jpg`],preview:`${iiif}/${a.image_id}/full/843,/0/default.jpg`,
+      thumb:`${iiif}/${a.image_id}/full/400,/0/default.jpg`,thumbAlt:[`${iiif}/${a.image_id}/full/843,/0/default.jpg`,{src:`${iiif}/${a.image_id}/full/600,/0/default.jpg`,ref:true}],
+      preview:`${iiif}/${a.image_id}/full/843,/0/default.jpg`,previewAlt:[{src:`${iiif}/${a.image_id}/full/600,/0/default.jpg`,ref:true}],lqip:/^data:image\/gif;base64,[\w+/=]+$/.test(a.thumbnail.lqip||"")?a.thumbnail.lqip:"",
       iiif:`${iiif}/${a.image_id}`,page:`https://www.artic.edu/artworks/${a.id}`,download:`${iiif}/${a.image_id}/full/full/0/default.jpg`,
       licence:"CC0",rights:CC0,sizeNote:"Size is the museum's master file; the download server may cap it — use \"Check downloadable size\"."}));
     return {items,more:(d.pagination?.current_page||0)<(d.pagination?.total_pages||0)};
@@ -878,6 +880,17 @@ function syncStar(c,id){
   const b=c.querySelector(".star"),on=savedIds.has(id);
   b.classList.toggle("on",on);b.textContent=on?"★ Saved":"☆ Save";b.setAttribute("aria-label",on?"Saved to a board: change boards":"Save to board");
 }
+/* an image that fails tries the item's other addresses in turn ({src,ref:true} also sends this site's address, which some image servers want),
+   then shows the museum's tiny colour sketch, blurred, with a note; museums such as Chicago put their image server behind an anti-bot check */
+function fallbackImg(img,alts=[],lqip="",note){
+  alts=[...(alts||[])];
+  img.onerror=()=>{
+    const n=alts.shift();
+    if(n){if(n.ref)img.referrerPolicy="strict-origin-when-cross-origin";img.src=n.src||n;return;}
+    img.onerror=null;note.hidden=false;
+    if(lqip){img.src=lqip;img.classList.add("lqip");}else img.hidden=true;
+  };
+}
 function card(it,o){
   const f=fitOf(it,o),d=document.createElement("div");d.className="card";d.dataset.id=it.id;
   d.innerHTML=`<div class="thumb" role="button" tabindex="0" aria-label="${esc("Details: "+it.title)}"><img loading="lazy" alt="" src="${esc(it.thumb||"")}" referrerpolicy="no-referrer"><span class="nothumb" hidden>Preview blocked by the museum — open for details</span></div>
@@ -888,8 +901,7 @@ function card(it,o){
   <div class="badges">${badgeHTML(it,o)}</div>
   <div class="acts"><button type="button" class="sim" title="Search again for this subject in the same medium">Similar</button><button type="button" class="star" aria-haspopup="dialog"></button></div></div>`;
   syncStar(d,it.id);
-  const img=d.querySelector(".thumb img"),alts=[...(it.thumbAlt||[])];
-  img.onerror=()=>{if(alts.length)img.src=alts.shift();else{img.hidden=true;d.querySelector(".nothumb").hidden=false;}};
+  fallbackImg(d.querySelector(".thumb img"),it.thumbAlt,it.lqip,d.querySelector(".nothumb"));
   d.querySelector(".thumb").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDetail(it);}};
   d.querySelector(".star").onclick=e=>{e.stopPropagation();boardPicker(it,e.currentTarget);};
   d.querySelector(".sim").onclick=e=>{e.stopPropagation();similar(it);};
@@ -941,7 +953,7 @@ function similar(it){
 function openDetail(it){
   closeTools();
   const o=cur(),f=fitOf(it,o),src=SRC[it.src];
-  $("dbody").innerHTML=`<div class="dlg"><div class="dimg"><img src="${esc(it.preview||it.thumb||"")}" alt="${esc(it.title)}" referrerpolicy="no-referrer"></div>
+  $("dbody").innerHTML=`<div class="dlg"><div class="dimg"><img src="${esc(it.preview||it.thumb||"")}" alt="${esc(it.title)}" referrerpolicy="no-referrer"><span class="nothumb" hidden>The museum's image server blocked this preview. Open the museum page to see it.</span></div>
   <div class="dinfo"><h2 id="dtitle">${esc(it.title)}</h2><div class="a">${esc(it.artist||"Unknown")}</div>
   <table>
    <tr><td>Date</td><td>${esc(it.date||"—")}</td></tr>
@@ -963,6 +975,7 @@ function openDetail(it){
   <div id="tool"></div>
   <button class="btn" id="save" type="button" aria-haspopup="dialog">Save to board…</button>
   </div></div>`;
+  fallbackImg($("dbody").querySelector(".dimg img"),it.previewAlt,it.lqip,$("dbody").querySelector(".dimg .nothumb"));
   $("save").onclick=e=>boardPicker(it,e.currentTarget);
   if($("pfbtn"))$("pfbtn").onclick=()=>printFile(it,o);
   $("wallbtn").onclick=()=>wallView(it,o);
