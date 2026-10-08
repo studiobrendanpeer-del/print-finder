@@ -73,14 +73,39 @@ button.st:hover{border-color:var(--muted)}
 .more{color:var(--muted);text-align:center;padding:24px 0 8px;display:grid;justify-items:center;gap:10px}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;width:min(1000px,94vw);max-height:92vh}
 dialog::backdrop{background:rgba(0,0,0,.55)}
-.x{position:sticky;top:8px;float:right;margin:8px 8px -40px 0;background:var(--panel);border:1px solid var(--line);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:16px;z-index:2} /* stays reachable while a long dialog scrolls */
+.x{position:sticky;top:8px;float:right;margin:8px 8px -40px 0;background:var(--panel);border:1px solid var(--line);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:16px;z-index:4} /* stays reachable while a long dialog scrolls */
 .dlg{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
-.dimg{background:var(--chip);display:flex;align-items:center;justify-content:center;min-height:300px;max-height:80vh}
+.dimg{background:var(--chip);display:flex;align-items:center;justify-content:center;min-height:300px;max-height:80vh;position:relative;overflow:hidden}
 .dimg img{max-width:100%;max-height:80vh;object-fit:contain}
 .dinfo{padding:18px;display:grid;gap:10px;align-content:start;font-size:14px;overflow:auto;max-height:86vh}
 .dinfo>*{min-width:0} /* the 100% crop is wider than the column: it scrolls inside its box instead of stretching the panel */
 .dinfo h2{font:600 19px/1.25 Georgia,serif;margin:0;padding-right:36px}
 @media (max-width:900px){.dlg{grid-template-columns:1fr}.dimg{min-height:200px;max-height:60vh}.dimg img{max-height:60vh}.dinfo{max-height:none;overflow:visible}}
+/* print tools: crop frame over the picture, wall preview in its place */
+.cropframe{position:absolute;outline:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 0 0 9999px rgba(0,0,0,.45);cursor:move;touch-action:none}
+.cropframe:focus-visible{outline:3px solid var(--accent)}
+.dimg.walling{align-items:stretch}
+.dimg.walling img{display:none}
+.wall{width:100%;display:flex;align-items:flex-end;justify-content:center} /* floor on the bottom edge, wall colour above */
+.scene{position:relative;width:min(100%,calc(78vh * var(--ar)));aspect-ratio:var(--ar)}
+@media (max-width:900px){.scene{width:min(100%,calc(58vh * var(--ar)))}
+  /* phones: while a tool is open the picture stays pinned at the top and the controls scroll beneath it */
+  .dlg.tooling .dimg{position:sticky;top:0;z-index:3;min-height:0;max-height:45vh;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+  .dlg.tooling .dimg img{max-height:45vh}
+  .dlg.tooling .scene{width:min(100%,calc(43vh * var(--ar)))}
+  #tool{scroll-margin-top:calc(45vh + 8px)}}
+.scene>*{position:absolute}
+.scene .art{box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.scene .mount,.scene .pic{position:absolute}
+.scene .mount{background:#fbfaf7}
+.scene .pic{background-color:#fff;background-position:center;background-repeat:no-repeat}
+.scene .floor{left:0;right:0;bottom:0}
+#tool:empty{display:none}
+#tool{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:10px}
+#tool h3{font:600 15px/1.2 Georgia,"Times New Roman",serif;margin:0}
+#tool .row{gap:10px}
+.tick{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);font-weight:500;letter-spacing:0}
+.swatch::before{content:"";display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--sw);border:1px solid var(--line);margin-right:6px;vertical-align:-1px}
 table{border-collapse:collapse;font-size:13px;width:100%}
 td{padding:4px 0;border-bottom:1px solid var(--line);vertical-align:top}
 td:first-child{color:var(--muted);width:42%;padding-right:8px}
@@ -911,6 +936,7 @@ function similar(it){
 
 /* ---------- detail ---------- */
 function openDetail(it){
+  closeTools();
   const o=cur(),f=fitOf(it,o),src=SRC[it.src];
   $("dbody").innerHTML=`<div class="dlg"><div class="dimg"><img src="${esc(it.preview||it.thumb||"")}" alt="${esc(it.title)}" referrerpolicy="no-referrer"></div>
   <div class="dinfo"><h2 id="dtitle">${esc(it.title)}</h2><div class="a">${esc(it.artist||"Unknown")}</div>
@@ -929,11 +955,14 @@ function openDetail(it){
   </table>
   ${it.sizeNote?`<div class="note">${esc(it.sizeNote)}</div>`:""}
   <div class="links"><a href="${esc(safeUrl(it.page))}" target="_blank" rel="noopener">Museum page ↗</a><a href="${esc(safeUrl(it.download))}" target="_blank" rel="noopener">Full-size file ↗</a>${it.downloadAlt?`<a href="${esc(safeUrl(it.downloadAlt))}" target="_blank" rel="noopener">JPEG version ↗</a>`:""}</div>
-  <button class="btn ghost" id="pix" type="button">View 100% detail (pixel-peep)</button>
+  <div class="links"><button class="btn ghost" id="pix" type="button">View 100% detail</button>${it.iiif?'<button class="btn ghost" id="pfbtn" type="button">Make print file…</button>':""}<button class="btn ghost" id="wallbtn" type="button">See it on a wall</button></div>
   <div id="cropbox"></div>
+  <div id="tool"></div>
   <button class="btn" id="save" type="button" aria-haspopup="dialog">Save to board…</button>
   </div></div>`;
   $("save").onclick=e=>boardPicker(it,e.currentTarget);
+  if($("pfbtn"))$("pfbtn").onclick=()=>printFile(it,o);
+  $("wallbtn").onclick=()=>wallView(it,o);
   { // one chip per title word, the artist, and a broad "same medium & era" search
     const m=mediumOf(it),era=it.year?{from:it.year-30,to:it.year+30}:{},sn=surname(it.artist),box=$("simchips");
     const chip=(label,args)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=label;b.onclick=()=>searchFor(args);box.appendChild(b);};
@@ -943,14 +972,9 @@ function openDetail(it){
   }
   if($("chk"))$("chk").onclick=async()=>{
     const cell=$("dl");cell.textContent="Checking…"; // the dialog may show another item by the time the answer arrives
-    try{const d=await getJSON(it.iiif+"/info.json");if(!cell.isConnected)return;
-      // IIIF size limits: a maxWidth on its own also caps the height
-      const p=d.profile?.[1]||{},mw=d.maxWidth||p.maxWidth,mh=d.maxHeight||p.maxHeight||mw,ma=d.maxArea||p.maxArea;
-      let w=+d.width,h=+d.height;if(!(w>0&&h>0))throw new Error("no size given");
-      if(mw&&w>mw){h=Math.round(h*mw/w);w=mw}
-      if(mh&&h>mh){w=Math.round(w*mh/h);h=mh}
-      if(ma&&w*h>ma){const s=Math.sqrt(ma/(w*h));w=Math.floor(w*s);h=Math.floor(h*s)}
-      const g=fit({w,h},o);
+    try{const d=await iiifInfo(it.iiif);if(!cell.isConnected)return;
+      const w0=+d.width,h0=+d.height;if(!(w0>0&&h0>0))throw new Error("no size given");
+      const {w,h}=iiifCap(d,w0,h0),g=fit({w,h},o);
       cell.innerHTML=`${fmtPx({w,h})} → <span class="b ${g.pass?"ok":"bad"}">${g.pass?"max "+sizeName(o.sys,g.max):"below "+sizeName(o.sys,sizeKeys(o.sys)[0])} at ${o.dpi} dpi</span>`;
     }catch(e){if(cell.isConnected)cell.textContent="Couldn't check ("+e.message+")";}
   };
@@ -973,8 +997,162 @@ $("pclose").onclick=()=>$("panel").close();
 ["dlg","panel"].forEach(id=>{const d=$(id);
   d.addEventListener("click",e=>{if(e.target===d)d.close()}); // click on the backdrop
   d.addEventListener("cancel",e=>{if(!$("bpop").hidden){e.preventDefault();closePop();}}); // Esc closes the board picker first
-  d.addEventListener("close",()=>closePop(false));
+  d.addEventListener("close",()=>{closePop(false);if(id==="dlg")closeTools();});
 });
+
+/* ---------- IIIF helpers ---------- */
+const infoCache=new Map();
+function iiifInfo(base){ // a picture's info.json, fetched once
+  if(!infoCache.has(base))infoCache.set(base,getJSON(base+"/info.json").catch(e=>{infoCache.delete(base);throw e}));
+  return infoCache.get(base);
+}
+const iiifV3=d=>d.type==="ImageService3"||/image\/3\//.test(String(d["@context"]));
+/* the largest w×h (same shape) the server will send; IIIF: a maxWidth on its own also caps the height */
+function iiifCap(d,w,h){
+  const p=Array.isArray(d.profile)&&d.profile[1]||{},mw=d.maxWidth||p.maxWidth,mh=d.maxHeight||p.maxHeight||mw,ma=d.maxArea||p.maxArea;
+  if(mw&&w>mw){h=h*mw/w;w=mw}
+  if(mh&&h>mh){w=w*mh/h;h=mh}
+  if(ma&&w*h>ma){const k=Math.sqrt(ma/(w*h));w*=k;h*=k}
+  return {w:Math.floor(w),h:Math.floor(h)};
+}
+
+/* ---------- print tools in the detail view: a print-ready file and a wall preview ---------- */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const fileSlug=t=>String(t||"").normalize("NFKD").replace(/[^\w-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"print";
+/* size k of the system as a sheet in inches, turned like the picture unless asked otherwise */
+function sheet(sys,k,it,orient="auto"){
+  const [s,l]=SYSTEMS[sys].sizes[k].map(mm=>mm/IN),portrait=orient==="p"||(orient==="auto"&&it.h>=it.w);
+  return portrait?{w:s,h:l}:{w:l,h:s};
+}
+/* write the print dpi into the JPEG (JFIF header), so design software opens the file at the intended size */
+function setJpegDpi(b,dpi){
+  if(b[0]!==0xFF||b[1]!==0xD8)return b;
+  const d=clamp(Math.round(dpi),1,65535),hi=d>>8,lo=d&255;
+  if(b[2]===0xFF&&b[3]===0xE0&&String.fromCharCode(...b.subarray(6,11))==="JFIF\0"){const o=b.slice();o[13]=1;o[14]=o[16]=hi;o[15]=o[17]=lo;return o;}
+  const o=new Uint8Array(b.length+18); // no JFIF header yet: add one after the start marker
+  o.set(b.subarray(0,2));o.set([0xFF,0xE0,0,16,0x4A,0x46,0x49,0x46,0,1,1,1,hi,lo,hi,lo,0,0],2);o.set(b.subarray(2),20);
+  return o;
+}
+let toolStop=null; // undoes whatever the open tool added to the picture area
+function closeTools(){if(toolStop){toolStop();toolStop=null;}const t=$("tool");if(t)t.replaceChildren();$("dbody").querySelector(".dlg")?.classList.remove("tooling");}
+/* a tool has opened: pin the picture on phones and scroll its controls into view */
+function toolOpened(){$("dbody").querySelector(".dlg").classList.add("tooling");$("tool").scrollIntoView({block:"start",behavior:"smooth"});}
+/* print-ready file: a crop with the sheet's exact shape, cut by the museum's image server at full resolution */
+function printFile(it,o){
+  closeTools();
+  const view=$("dbody").querySelector(".dimg"),img=view.querySelector("img"),tool=$("tool"),keys=sizeKeys(o.sys);
+  // cropping to fill a sheet: dpi = the tighter of the two sides; start with the largest size that still meets the chosen dpi
+  const fillDpi=(k,orient)=>{const p=sheet(o.sys,k,it,orient);return Math.round(Math.min(it.w/p.w,it.h/p.h));};
+  const c={k:[...keys].reverse().find(k=>fillDpi(k,"auto")>=o.dpi)||keys[0],orient:"auto",z:100,fx:.5,fy:.5,cap:300};
+  let info=null,ac=null;
+  iiifInfo(it.iiif).then(d=>{info=d;place();}).catch(()=>{});
+  // the crop (x,y,w,h in picture pixels) and the file it gives: W×H pixels on the museum's own grid, scaled down to the chosen resolution and the server's limits
+  const geo=()=>{
+    const p=sheet(o.sys,c.k,it,c.orient),a=p.w/p.h;
+    let w,h;if(it.w/it.h>a){h=it.h;w=h*a}else{w=it.w;h=w/a}
+    w*=c.z/100;h*=c.z/100;
+    const x=clamp(c.fx*it.w-w/2,0,it.w-w),y=clamp(c.fy*it.h-h/2,0,it.h-h);
+    const k=info?info.width/it.w:1,W=w*k,H=h*k; // sizes can come from another record of the same picture
+    const dpi0=c.cap?Math.min(c.cap,W/p.w):W/p.w,want={w:p.w*dpi0,h:p.h*dpi0};
+    const out=info?iiifCap(info,want.w,want.h):{w:Math.floor(want.w),h:Math.floor(want.h)};
+    return {x,y,w,h,k,p,W,H,outW:out.w,outH:out.h,dpi:out.w/p.w,capped:!!info&&out.w<Math.floor(want.w)};
+  };
+  const sizeOptions=()=>keys.map(k=>{const d=fillDpi(k,c.orient);
+    return `<option value="${k}" ${k===c.k?"selected":""}>${sizeName(o.sys,k)} — up to ${d} dpi ${d>=o.dpi?"✓":"✗"}</option>`;}).join("");
+  tool.innerHTML=`<h3>Print-ready file</h3>
+    <div class="row"><label>Size<select id="pfsize">${sizeOptions()}</select></label>
+    <label>Orientation<select id="pfor"><option value="auto">Like the picture</option><option value="p">Portrait</option><option value="l">Landscape</option></select></label>
+    <label>File resolution<select id="pfcap"><option value="300">Up to 300 dpi (recommended)</option><option value="400">Up to 400 dpi</option><option value="0">Everything the museum has</option></select></label></div>
+    <label>Crop tighter<input type="range" id="pfzoom" min="40" max="100" value="100"></label>
+    <p class="note">Drag the frame on the picture, or use the arrow keys, to choose what gets printed.</p>
+    <p id="pfout"></p>
+    <div class="links"><button class="btn" type="button" id="pfgo">Download print file</button><button class="btn ghost" type="button" id="pfdone">Done</button></div>
+    <p class="note" id="pfmsg" role="status"></p>`;
+  const frame=document.createElement("div");frame.className="cropframe";frame.tabIndex=0;frame.setAttribute("aria-label","Crop area: drag it, or move it with the arrow keys");
+  view.appendChild(frame);
+  const place=()=>{
+    if(!frame.isConnected||!img.clientWidth)return; // tool closed, or picture not laid out yet
+    const g=geo(),s=img.clientWidth/it.w;
+    Object.assign(frame.style,{left:img.offsetLeft+g.x*s+"px",top:img.offsetTop+g.y*s+"px",width:g.w*s+"px",height:g.h*s+"px"});
+    c.fx=(g.x+g.w/2)/it.w;c.fy=(g.y+g.h/2)/it.h; // keep the centre where the frame really is
+    $("pfout").innerHTML=`File: <b>${g.outW.toLocaleString()} × ${g.outH.toLocaleString()} px</b> → ${sizeName(o.sys,c.k)} at <span class="b ${g.dpi>=o.dpi?"ok":"bad"}">${Math.round(g.dpi)} dpi ${g.dpi>=o.dpi?"✓":"✗"}</span>${g.capped?' <span class="note">(the museum limits how large a file it sends)</span>':""}`;
+  };
+  frame.onpointerdown=e=>{
+    frame.setPointerCapture(e.pointerId);const x0=e.clientX,y0=e.clientY,fx=c.fx,fy=c.fy;
+    frame.onpointermove=ev=>{c.fx=fx+(ev.clientX-x0)/img.clientWidth;c.fy=fy+(ev.clientY-y0)/img.clientHeight;place();};
+    frame.onpointerup=frame.onpointercancel=()=>{frame.onpointermove=null;};
+  };
+  frame.onkeydown=e=>{const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!d)return;e.preventDefault();c.fx+=d[0]*.02;c.fy+=d[1]*.02;place();};
+  $("pfsize").onchange=e=>{c.k=e.target.value;place();};
+  $("pfor").onchange=e=>{c.orient=e.target.value;$("pfsize").innerHTML=sizeOptions();place();};
+  $("pfcap").onchange=e=>{c.cap=+e.target.value;place();};
+  $("pfzoom").oninput=e=>{c.z=+e.target.value;place();};
+  $("pfdone").onclick=closeTools;
+  $("pfgo").onclick=async()=>{
+    const g=geo(),msg=$("pfmsg"),btn=$("pfgo"),d=info||await iiifInfo(it.iiif).catch(()=>null);
+    const v3=d?iiifV3(d):false,X=Math.round(g.x*g.k),Y=Math.round(g.y*g.k),W=Math.round(g.W),H=Math.round(g.H);
+    const size=g.outW>=W?(v3?"max":"full"):`${g.outW},${g.outH}`; // full resolution: "max" on IIIF 3 servers, "full" on IIIF 2
+    const url=`${it.iiif}/${X},${Y},${W},${H}/${size}/0/default.jpg`,dpi=Math.round(g.outW/g.p.w);
+    const name=`${fileSlug(it.title)}-${sizeName(o.sys,c.k).replace(/×/g,"x").replace(/\s+/g,"")}-${dpi}dpi.jpg`; // e.g. …-50x70cm-300dpi.jpg
+    btn.disabled=true;msg.textContent="The museum is preparing the file…";ac=new AbortController();
+    try{
+      const r=await fetch(url,{signal:ac.signal});if(!r.ok)throw new Error("HTTP "+r.status);
+      const rd=r.body.getReader(),parts=[];let got=0;
+      for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;msg.textContent=`Downloading… ${(got/1e6).toFixed(1)} MB`;}
+      const bytes=new Uint8Array(got);let at=0;for(const part of parts){bytes.set(part,at);at+=part.length;}
+      download(name,setJpegDpi(bytes,dpi),"image/jpeg");
+      msg.textContent=`Saved ${name} (${(got/1e6).toFixed(1)} MB). It opens at ${sizeName(o.sys,c.k)} size at ${dpi} dpi.`;
+    }catch(e){
+      if(e.name==="AbortError")return;
+      msg.innerHTML=`Couldn't save it from here (${esc(e.message)}). <a href="${esc(url)}" target="_blank" rel="noopener">Open the cropped file</a> and save it from the new tab; set the print size to ${dpi} dpi in your software.`;
+    }finally{btn.disabled=false;ac=null;}
+  };
+  const ro=new ResizeObserver(place);ro.observe(img);img.addEventListener("load",place);
+  toolStop=()=>{ro.disconnect();img.removeEventListener("load",place);frame.remove();ac?.abort();};
+  toolOpened();place();frame.focus({preventScroll:true});
+}
+/* wall preview: the print framed on a wall above a 210 cm sofa, at true relative size */
+const WALLS={"Warm white":"#efebe4","Light grey":"#d8d5cf","Sage":"#b8c2b0","Terracotta":"#c58f74","Navy":"#2e3a4b"};
+const FRAMES={black:["Black","#1d1b18"],white:["White","#f3f0ea"],oak:["Oak","#a97c4c"],none:["No frame",""]};
+function wallView(it,o){
+  closeTools();
+  const view=$("dbody").querySelector(".dimg"),tool=$("tool"),keys=sizeKeys(o.sys),f=fitOf(it,o);
+  const st={k:f.max||keys[0],frame:"black",mount:true,wall:"Warm white"};
+  tool.innerHTML=`<h3>On a wall</h3>
+    <div class="row"><label>Size<select id="mwsize">${f.sizes.map(x=>`<option value="${x.k}" ${x.k===st.k?"selected":""}>${sizeName(o.sys,x.k)} — ${x.dpi} dpi ${x.dpi>=o.dpi?"✓":"✗"}</option>`).join("")}</select></label>
+    <label>Frame<select id="mwframe">${Object.entries(FRAMES).map(([k,[n]])=>`<option value="${k}">${n}</option>`).join("")}</select></label>
+    <label class="tick"><input type="checkbox" id="mwmount" checked> White mount</label></div>
+    <div class="chips" id="mwwall" role="group" aria-label="Wall colour">${Object.entries(WALLS).map(([n,col])=>`<button type="button" class="chip swatch ${n===st.wall?"on":""}" aria-pressed="${n===st.wall}" data-v="${n}" style="--sw:${col}">${n}</button>`).join("")}</div>
+    <p class="note" id="mwdims"></p>
+    <div class="links"><button class="btn ghost" type="button" id="mwdone">Back to the picture</button></div>`;
+  const wall=document.createElement("div");wall.className="wall";view.appendChild(wall);view.classList.add("walling");
+  const bg=view.style.background;
+  const draw=()=>{
+    const s=sheet(o.sys,st.k,it),cmW=s.w*IN/10,cmH=s.h*IN/10; // the sheet in cm
+    const mount=st.mount?clamp(Math.max(cmW,cmH)*.08,4,12):0,fw=FRAMES[st.frame][1]?2.5:0;
+    const ow=cmW+2*(mount+fw),oh=cmH+2*(mount+fw);
+    const FLOOR=12,SOFA_W=210,SOFA_H=85,GAP=25,W=Math.max(320,ow+120),H=Math.max(240,FLOOR+SOFA_H+GAP+oh+35);
+    const dark=st.wall==="Navy",col=WALLS[st.wall];
+    view.style.background=col;
+    wall.innerHTML=`<div class="scene" style="--ar:${W/H};background:${col}">
+      <div class="floor" style="height:${FLOOR/H*100}%;background:${dark?"#8e7d68":"#c9b89f"}"></div>
+      <svg class="sofa" viewBox="0 0 210 85" preserveAspectRatio="none" aria-hidden="true" style="left:${(W-SOFA_W)/2/W*100}%;width:${SOFA_W/W*100}%;bottom:${FLOOR/H*100}%;height:${SOFA_H/H*100}%"><g fill="${dark?"#a39a8d":"#8a8278"}"><rect x="14" y="6" width="182" height="46" rx="9"/><rect x="0" y="28" width="24" height="46" rx="9"/><rect x="186" y="28" width="24" height="46" rx="9"/><rect x="18" y="72" width="6" height="13"/><rect x="186" y="72" width="6" height="13"/></g><rect x="20" y="44" width="170" height="28" rx="6" fill="${dark?"#b1a89b":"#968e83"}"/></svg>
+      <div class="art" style="left:${(W-ow)/2/W*100}%;width:${ow/W*100}%;bottom:${(FLOOR+SOFA_H+GAP)/H*100}%;height:${oh/H*100}%;background:${FRAMES[st.frame][1]||"transparent"}">
+        <div class="mount" style="left:${fw/ow*100}%;right:${fw/ow*100}%;top:${fw/oh*100}%;bottom:${fw/oh*100}%"><div class="pic"></div></div></div></div>`;
+    const pic=wall.querySelector(".pic"),iw=cmW+2*mount,ih=cmH+2*mount;
+    Object.assign(pic.style,{left:mount/iw*100+"%",right:mount/iw*100+"%",top:mount/ih*100+"%",bottom:mount/ih*100+"%",
+      backgroundImage:`url("${String(it.preview||it.thumb||"").replace(/["\\\n]/g,encodeURIComponent)}")`,backgroundSize:o.mode==="cover"?"cover":"contain"});
+    const u=SYSTEMS[o.sys].unit,cv=x=>u==="in"?x/2.54:x;
+    $("mwdims").textContent=`Print ${cv(cmW).toFixed(0)} × ${cv(cmH).toFixed(0)} ${u}${mount||fw?`, about ${cv(ow).toFixed(0)} × ${cv(oh).toFixed(0)} ${u} framed`:""}. The sofa is ${u==="in"?"83 in":"210 cm"} wide, for scale.`;
+  };
+  $("mwsize").onchange=e=>{st.k=e.target.value;draw();};
+  $("mwframe").onchange=e=>{st.frame=e.target.value;draw();};
+  $("mwmount").onchange=e=>{st.mount=e.target.checked;draw();};
+  $("mwwall").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;st.wall=b.dataset.v;$("mwwall").querySelectorAll("button").forEach(x=>press(x,x===b));draw();});
+  $("mwdone").onclick=closeTools;
+  toolStop=()=>{wall.remove();view.classList.remove("walling");view.style.background=bg;};
+  toolOpened();draw();
+}
 
 /* ---------- boards ---------- */
 /* what a board keeps of an item; also cleans items read from imported backups */
@@ -1028,7 +1206,7 @@ addEventListener("storage",e=>{
 });
 updateBoardsBtn();
 let curBoard=null;
-function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);}
+function download(name,data,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),60000);}
 const csvCell=v=>{let s=String(v??"");if(/^[=+\-@]/.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`;}; // a leading ' stops spreadsheets running it as a formula
 function showBoards(msg=""){
   if(!boards.some(b=>b.id===curBoard))curBoard=boards[0]?.id||null;
