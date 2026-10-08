@@ -131,7 +131,7 @@ td:first-child{color:var(--muted);width:42%;padding-right:8px}
 <body>
 <header>
   <h1>Print Finder</h1>
-  <p class="sub">Searches <span id="nsrc"></span> open-access collections and keeps only public domain images big enough to print at A4 or larger, showing the largest A size each one can print.</p>
+  <p class="sub">Searches <span id="nsrc"></span> open-access collections and keeps only public domain images big enough to print at the size you choose or larger, showing the largest size each one can print.</p>
 </header>
 <div class="wrap">
 <form id="f">
@@ -184,6 +184,7 @@ const SYSTEMS={
 };
 const sizeKeys=sys=>Object.keys(SYSTEMS[sys].sizes);
 const sizeName=(sys,k)=>sys==="A"?k:`${k} ${SYSTEMS[sys].unit}`; // "A2", "16×20 in", "50×70 cm"
+const aSize=(sys,k)=>(/^(A|8|11|18)/.test(k)?"an ":"a ")+sizeName(sys,k); // "an A4", "an 18×24 cm", "a 30×40 cm"
 const MED={
   painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",loc:"paintings",mia:"Paintings",wellcome:"Paintings,Oil paintings,Watercolor painting,Gouaches",re:/paint|oil|tempera|maleri|olie/i},
   drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",loc:"drawings",mia:"Drawings",wellcome:"Drawings,Ink drawings,Chalk drawings,Sketches,Watercolor painting,Gouaches",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i},
@@ -264,7 +265,7 @@ function opts(){
 }
 function showNeed(){const o=opts(),min=sizeName(o.sys,sizeKeys(o.sys)[0]);$("need").innerHTML=o.mode==="contain"
   ?`Shows everything that prints at <b>${min} or larger</b> at ${o.dpi} dpi (at least ${o.needL.toLocaleString()} px on the long side or ${o.needS.toLocaleString()} px on the short side). Each result shows the largest size it can print.`
-  :`Shows everything that fills <b>a ${min} sheet or larger</b> at ${o.dpi} dpi (at least ${o.needS.toLocaleString()} × ${o.needL.toLocaleString()} px). Each result shows the largest size it can fill.`;}
+  :`Shows everything that fills <b>${aSize(o.sys,sizeKeys(o.sys)[0])} sheet or larger</b> at ${o.dpi} dpi (at least ${o.needS.toLocaleString()} × ${o.needL.toLocaleString()} px). Each result shows the largest size it can fill.`;}
 showNeed();
 
 /* ---------- print maths ---------- */
@@ -950,7 +951,7 @@ function openDetail(it){
    <tr><td>Pixels</td><td>${fmtPx(it)} (${(it.w*it.h/1e6).toFixed(1)} MP)</td></tr>
    <tr><td>Largest print size</td><td><b>${sizeName(o.sys,f.max)}</b> at ${o.dpi} dpi (${o.mode==="cover"?"filling the sheet":"whole image"})</td></tr>
    <tr><td>DPI at each size</td><td><div class="dpis">${f.sizes.slice(0,f.rank+2).map(x=>`<span>${sizeName(o.sys,x.k)} <span class="b ${x.dpi>=o.dpi?"ok":"bad"}">${x.dpi} ${x.dpi>=o.dpi?"✓":"✗"}</span></span>`).join("")}</div></td></tr>
-   <tr><td>Crop to fill a ${sizeName(o.sys,f.max)} sheet</td><td>${f.crop}%</td></tr>
+   <tr><td>Crop to fill ${aSize(o.sys,f.max)} sheet</td><td>${f.crop}%</td></tr>
    <tr><td>Image size at ${o.dpi} dpi</td><td>${printSize(f,o)}</td></tr>
    <tr><td>Find similar</td><td><div class="chips" id="simchips"></div></td></tr>
    <tr><td>Downloadable</td><td id="dl">${it.iiif?'<button class="btn ghost" id="chk" type="button">Check downloadable size</button>':"Full file from source"}</td></tr>
@@ -1027,116 +1028,162 @@ function iiifCap(d,w,h){
 
 /* ---------- print tools in the detail view: a print-ready file and a wall preview ---------- */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const fileSlug=t=>String(t||"").normalize("NFKD").replace(/[^\w-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"print";
+const fileSlug=t=>String(t||"").normalize("NFKD").replace(/\p{M}+/gu,"").replace(/[øØ]/g,"o").replace(/[æÆ]/g,"ae").replace(/ß/g,"ss")
+  .replace(/[^\w-]+/g,"-").replace(/-{2,}/g,"-").slice(0,60).replace(/^-+|-+$/g,"")||"print"; // plain letters for file names: "Pétrus" → "Petrus"
 /* size k of the system as a sheet in inches, turned like the picture unless asked otherwise */
 function sheet(sys,k,it,orient="auto"){
   const [s,l]=SYSTEMS[sys].sizes[k].map(mm=>mm/IN),portrait=orient==="p"||(orient==="auto"&&it.h>=it.w);
   return portrait?{w:s,h:l}:{w:l,h:s};
 }
-/* write the print dpi into the JPEG (JFIF header), so design software opens the file at the intended size */
-function setJpegDpi(b,dpi){
-  if(b[0]!==0xFF||b[1]!==0xD8)return b;
-  const d=clamp(Math.round(dpi),1,65535),hi=d>>8,lo=d&255;
-  if(b[2]===0xFF&&b[3]===0xE0&&String.fromCharCode(...b.subarray(6,11))==="JFIF\0"){const o=b.slice();o[13]=1;o[14]=o[16]=hi;o[15]=o[17]=lo;return o;}
-  const o=new Uint8Array(b.length+18); // no JFIF header yet: add one after the start marker
-  o.set(b.subarray(0,2));o.set([0xFF,0xE0,0,16,0x4A,0x46,0x49,0x46,0,1,1,1,hi,lo,hi,lo,0,0],2);o.set(b.subarray(2),20);
-  return o;
+/* the file with its print dpi in the header (JFIF), so design software opens it at the intended size. An Exif block goes:
+   it carries its own resolution (usually 72 dpi), which some programs read first. Works on the first bytes only; the rest is passed on untouched */
+async function jpegWithDpi(blob,dpi){
+  const b=new Uint8Array(await blob.slice(0,262144).arrayBuffer());
+  if(b[0]!==0xFF||b[1]!==0xD8)return blob;
+  const d=clamp(Math.round(dpi),1,65535),keep=[];let i=2;
+  while(i+9<b.length&&b[i]===0xFF&&b[i+1]>=0xE0&&b[i+1]<=0xEF){ // the APPn blocks at the start
+    const end=i+2+(b[i+2]<<8|b[i+3]);if(end>b.length)break;
+    const tag=String.fromCharCode(...b.subarray(i+4,i+9));
+    if(!(b[i+1]===0xE0&&tag==="JFIF\0")&&!(b[i+1]===0xE1&&tag==="Exif\0"))keep.push(b.subarray(i,end)); // keep the colour profile and the rest
+    i=end;
+  }
+  const jfif=new Uint8Array([0xFF,0xD8,0xFF,0xE0,0,16,0x4A,0x46,0x49,0x46,0,1,1,1,d>>8,d&255,d>>8,d&255,0,0]);
+  return new Blob([jfif,...keep,blob.slice(i)],{type:"image/jpeg"});
 }
 let toolStop=null; // undoes whatever the open tool added to the picture area
 function closeTools(){if(toolStop){toolStop();toolStop=null;}const t=$("tool");if(t)t.replaceChildren();$("dbody").querySelector(".dlg")?.classList.remove("tooling");}
 /* a tool has opened: pin the picture on phones and scroll its controls into view */
 function toolOpened(){$("dbody").querySelector(".dlg").classList.add("tooling");$("tool").scrollIntoView({block:"start",behavior:"smooth"});}
-/* a file's bytes, reporting progress as they arrive */
-async function fetchBytes(url,signal,progress){
+/* a file as a Blob, reporting progress as it arrives */
+async function fetchBlob(url,signal,progress){
   const r=await fetch(url,{signal});if(!r.ok)throw new Error("HTTP "+r.status);
   const rd=r.body.getReader(),parts=[];let got=0;
   for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;progress?.(got);}
-  const b=new Uint8Array(got);let at=0;for(const part of parts){b.set(part,at);at+=part.length;}
-  return b;
+  return new Blob(parts,{type:"image/jpeg"});
 }
-/* the biggest canvas this browser will make, up to w×h and the same shape (Safari on phones stops near 16.7 MP; past its limit drawing fails silently) */
+/* how many pixels one canvas may hold (big print files are built on one): about 16.7 MP on iPhones and iPads (and kept to that on Android,
+   where a bigger one can run the phone out of memory), 125 MP in Firefox, 268 MP in Chrome, Edge and Safari on a computer */
+const PHONE_CANVAS=/iPhone|iPad|iPod|Android/.test(navigator.userAgent)||/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1;
+const CANVAS_MAX=PHONE_CANVAS?16777216:/Firefox\//.test(navigator.userAgent)?124992400:268435456;
+/* the biggest canvas this browser really makes, up to w×h and the same shape (past its limit, drawing fails silently) */
 function canvasFor(w,h){
-  for(let k=1;k>.1;k*=.85){
+  for(let k=Math.min(1,Math.sqrt(CANVAS_MAX/(w*h)));k>.1;k*=.95){
     const cv=document.createElement("canvas");cv.width=Math.floor(w*k);cv.height=Math.floor(h*k);
     try{const cx=cv.getContext("2d");cx.fillRect(cv.width-1,cv.height-1,1,1);if(cx.getImageData(cv.width-1,cv.height-1,1,1).data[3]===255)return cv;}catch(e){}
     cv.width=cv.height=0; // let the memory go
   }
   return null;
 }
-/* a crop too big for one request: fetched in pieces at the final size and joined on a canvas, then saved as a high-quality JPEG.
-   g = the crop (X,Y,W,H on the museum's grid) and the file (outW×outH); T = the largest piece the server sends */
+/* a print file built on a canvas: the crop fetched in pieces at its final size and joined, with white margins if asked, then saved as a high-quality JPEG.
+   g = the plan (see printFile); T = the largest piece the server sends; part() = a piece's IIIF address */
 async function stitch(g,T,part,signal,say){
-  const cv=canvasFor(g.outW,g.outH);if(!cv)throw new Error("this browser can't build a file this large");
-  const fw=cv.width,fh=cv.height,cx=cv.getContext("2d");cx.imageSmoothingQuality="high";
+  const cv=canvasFor(g.fileW,g.fileH);if(!cv)throw new Error("this browser can't build a file this large");
+  const cw=cv.width,ch=cv.height,rx=cw/g.fileW,ry=ch/g.fileH; // the canvas can come out smaller than planned
+  const fw=Math.round(g.outW*rx),fh=Math.round(g.outH*ry),ox=Math.round(g.ox*rx),oy=Math.round(g.oy*ry); // the picture on it
+  const cx=cv.getContext("2d");cx.imageSmoothingQuality="high";
+  if(fw<cw||fh<ch){cx.fillStyle="#fff";cx.fillRect(0,0,cw,ch);}
   const M=fw<g.W?8:0,B=T-2*M,cols=Math.ceil(fw/B),rows=Math.ceil(fh/B); // pieces the server scales get an 8 px margin, so their edges can't show as seams
-  const fx=i=>Math.floor(i*fw/cols),fy=j=>Math.floor(j*fh/rows); // piece edges in the file…
+  const px=i=>Math.floor(i*fw/cols),py=j=>Math.floor(j*fh/rows); // piece edges in the picture…
   const sx=v=>g.X+Math.round(v*g.W/fw),sy=v=>g.Y+Math.round(v*g.H/fh); // …and on the museum's grid
   let n=0,mb=0;
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
-    const x0=fx(i),y0=fy(j),x1=fx(i+1),y1=fy(j+1);
+    const x0=px(i),y0=py(j),x1=px(i+1),y1=py(j+1);
     const ex0=Math.max(0,x0-M),ey0=Math.max(0,y0-M),ex1=Math.min(fw,x1+M),ey1=Math.min(fh,y1+M),ow=ex1-ex0,oh=ey1-ey0; // the piece with its margin
-    const X=sx(ex0),Y=sy(ey0),W=sx(ex1)-X,H=sy(ey1)-Y,label=`Downloading piece ${++n} of ${cols*rows}…`,base=mb;
+    const X=sx(ex0),Y=sy(ey0),W=sx(ex1)-X,H=sy(ey1)-Y,label=cols*rows>1?`Downloading piece ${++n} of ${cols*rows}…`:"Downloading…",base=mb;
     say(label);
-    const bytes=await fetchBytes(part(X,Y,W,H,ow,oh),signal,b=>say(`${label} ${((base+b)/1e6).toFixed(1)} MB`));mb+=bytes.length;
-    const bmp=await createImageBitmap(new Blob([bytes],{type:"image/jpeg"}));
+    const blob=await fetchBlob(part(X,Y,W,H,ow,oh),signal,b=>say(`${label} ${((base+b)/1e6).toFixed(1)} MB`));mb+=blob.size;
+    const bmp=await createImageBitmap(blob);
     if(Math.abs(bmp.width-ow)>2||Math.abs(bmp.height-oh)>2){bmp.close();throw new Error("the museum sent a piece at the wrong size");}
     const kx=bmp.width/ow,ky=bmp.height/oh;
-    cx.drawImage(bmp,(x0-ex0)*kx,(y0-ey0)*ky,(x1-x0)*kx,(y1-y0)*ky,x0,y0,x1-x0,y1-y0);bmp.close();
+    cx.drawImage(bmp,(x0-ex0)*kx,(y0-ey0)*ky,(x1-x0)*kx,(y1-y0)*ky,ox+x0,oy+y0,x1-x0,y1-y0);bmp.close();
   }
   say("Building the file…");
   const blob=await new Promise(r=>cv.toBlob(r,"image/jpeg",.95));cv.width=cv.height=0;
   if(!blob)throw new Error("this browser can't build a file this large");
-  return {bytes:new Uint8Array(await blob.arrayBuffer()),w:fw,h:fh};
+  return {blob,w:cw,h:ch};
 }
-/* print-ready file: a crop with the sheet's exact shape, cut by the museum's image server at full resolution */
+/* the print file for plan g: the museum's own JPEG when one request carries it, otherwise built on a canvas */
+async function makeFile(g,info,part,signal,say){
+  const lim=iiifLimits(info),one=iiifCap(info,g.outW,g.outH),fits=one.w>=g.outW&&one.h>=g.outH;
+  let T=Math.floor(Math.min(4096,lim.mw||4096,lim.mh||4096,lim.ma?Math.sqrt(lim.ma):4096)); // the largest piece to ask for
+  if(fits&&g.fileW===g.outW&&g.fileH===g.outH){ // one request and no margins: the museum's own JPEG, untouched
+    const blob=await fetchBlob(part(g.X,g.Y,g.W,g.H,g.outW,g.outH),signal,b=>say(`Downloading… ${(b/1e6).toFixed(1)} MB`));
+    const got=sofSize(new Uint8Array(await blob.slice(0,262144).arrayBuffer()));
+    if(!got)throw new Error("the museum didn't send a JPEG");
+    if(Math.abs(got.w-g.outW)<=2&&Math.abs(got.h-g.outH)<=2)return {blob,w:got.w,h:got.h};
+    if(Math.max(got.w,got.h)<1000)throw new Error(`the museum sent ${got.w}×${got.h} px instead`);
+    T=Math.min(T,Math.max(got.w,got.h)); // it quietly sent another size: build the file from pieces no bigger than that
+  }else if(fits)T=Math.max(g.outW,g.outH)+16; // margins to add, but the picture comes in one piece
+  return stitch(g,T,part,signal,say);
+}
+/* print-ready file: the sheet's exact shape, cut by the museum's image server at full resolution — filled (cropped) or the whole picture with white margins */
 function printFile(it,o){
   closeTools();
-  const view=$("dbody").querySelector(".dimg"),img=view.querySelector("img"),tool=$("tool"),keys=sizeKeys(o.sys);
-  // cropping to fill a sheet: dpi = the tighter of the two sides; start with the largest size that still meets the chosen dpi
-  const fillDpi=(k,orient)=>{const p=sheet(o.sys,k,it,orient);return Math.round(Math.min(it.w/p.w,it.h/p.h));};
-  const c={k:[...keys].reverse().find(k=>fillDpi(k,"auto")>=o.dpi)||keys[0],orient:"auto",z:100,fx:.5,fy:.5,cap:300};
+  const view=$("dbody").querySelector(".dimg"),img=view.querySelector("img"),tool=$("tool"),keys=sizeKeys(o.sys),u=SYSTEMS[o.sys].unit;
+  const c={k:keys[0],chosen:false,fit:o.mode==="cover"?"fill":"whole",orient:"auto",z:100,fx:.5,fy:.5,cap:300};
   let info=null,ac=null;
-  iiifInfo(it.iiif).then(d=>{info=d;place();}).catch(()=>{});
-  // the crop: x,y,w,h in picture pixels; X,Y,W,H the same on the museum's own grid; outW×outH the file, scaled down only to the chosen resolution
-  const geo=()=>{
-    const p=sheet(o.sys,c.k,it,c.orient),a=p.w/p.h;
-    let w,h;if(it.w/it.h>a){h=it.h;w=h*a}else{w=it.w;h=w/a}
-    w*=c.z/100;h*=c.z/100;
-    const x=clamp(c.fx*it.w-w/2,0,it.w-w),y=clamp(c.fy*it.h-h/2,0,it.h-h);
-    const k=info?info.width/it.w:1,iw=info?+info.width:it.w,ih=info?+info.height:it.h; // sizes can come from another record of the same picture
-    const W=clamp(Math.round(w*k),1,iw),H=clamp(Math.round(h*k),1,ih),X=clamp(Math.round(x*k),0,iw-W),Y=clamp(Math.round(y*k),0,ih-H);
-    const s=c.cap?Math.min(1,c.cap*p.w/W):1; // 1 = every pixel the museum has
-    const outW=s<1?Math.round(W*s):W,outH=s<1?Math.round(H*s):H;
-    return {x,y,w,h,X,Y,W,H,p,outW,outH,dpi:Math.round(outW/p.w)};
+  // the file for size k: x,y,w,h = the crop in picture pixels; X,Y,W,H = the same on the museum's own grid; outW×outH = the picture in the file;
+  // fileW×fileH = the whole file (bigger than the picture when white margins are added, at ox,oy). Scaled down only to the resolution asked for,
+  // and to what this browser can build when the file has to be made on a canvas (limited)
+  const plan=(k=c.k,cap=c.cap,z=c.z)=>{
+    const p=sheet(o.sys,k,it,c.orient),a=p.w/p.h,whole=c.fit==="whole";
+    let x=0,y=0,w=it.w,h=it.h;
+    if(!whole){
+      if(it.w/it.h>a){h=it.h;w=h*a}else{w=it.w;h=w/a}
+      w*=z/100;h*=z/100;x=clamp(c.fx*it.w-w/2,0,it.w-w);y=clamp(c.fy*it.h-h/2,0,it.h-h);
+    }
+    const k0=info?info.width/it.w:1,iw=info?+info.width:it.w,ih=info?+info.height:it.h; // sizes can come from another record of the same picture
+    const W=clamp(Math.round(w*k0),1,iw),H=clamp(Math.round(h*k0),1,ih),X=clamp(Math.round(x*k0),0,iw-W),Y=clamp(Math.round(y*k0),0,ih-H);
+    const full=whole?Math.max(W/p.w,H/p.h):W/p.w,dpi=cap?Math.min(cap,full):full; // full = the dpi with every pixel the museum has
+    let outW=dpi<full?Math.round(W*dpi/full):W,outH=dpi<full?Math.round(H*dpi/full):H;
+    let fileW=whole?Math.max(outW,Math.round(p.w*dpi)):outW,fileH=whole?Math.max(outH,Math.round(p.h*dpi)):outH,limited=false;
+    const one=info?iiifCap(info,outW,outH):{w:outW,h:outH};
+    if((fileW>outW||fileH>outH||one.w<outW||one.h<outH)&&fileW*fileH>CANVAS_MAX){ // built on a canvas, and too big for one
+      const r=Math.sqrt(CANVAS_MAX/(fileW*fileH));fileW=Math.floor(fileW*r);fileH=Math.floor(fileH*r);outW=Math.floor(outW*r);outH=Math.floor(outH*r);limited=true;
+    }
+    return {x,y,w,h,X,Y,W,H,p,outW,outH,fileW,fileH,ox:Math.floor((fileW-outW)/2),oy:Math.floor((fileH-outH)/2),dpi:Math.round(fileW/p.w),limited};
   };
-  const sizeOptions=()=>keys.map(k=>{const d=fillDpi(k,c.orient);
+  const largest=()=>[...keys].reverse().find(k=>plan(k,0,100).dpi>=o.dpi)||keys[0]; // the biggest size that still meets the chosen dpi
+  const sizeOptions=()=>keys.map(k=>{const d=plan(k,0,100).dpi;
     return `<option value="${k}" ${k===c.k?"selected":""}>${sizeName(o.sys,k)} — up to ${d} dpi ${d>=o.dpi?"✓":"✗"}</option>`;}).join("");
+  c.k=largest();
   tool.innerHTML=`<h3>Print-ready file</h3>
-    <div class="row"><label>Size<select id="pfsize">${sizeOptions()}</select></label>
-    <label>Orientation<select id="pfor"><option value="auto">Like the picture</option><option value="p">Portrait</option><option value="l">Landscape</option></select></label>
+    <div class="row"><label>Layout<select id="pffit"><option value="whole">Whole image, with margins</option><option value="fill">Fill the sheet (crop)</option></select></label>
+    <label>Size<select id="pfsize">${sizeOptions()}</select></label>
+    ${o.sys==="square"?"":`<label>Orientation<select id="pfor"><option value="auto">Like the picture</option><option value="p">Portrait</option><option value="l">Landscape</option></select></label>`}
     <label>File resolution<select id="pfcap"><option value="300">Up to 300 dpi (recommended)</option><option value="400">Up to 400 dpi</option><option value="0">Everything the museum has</option></select></label></div>
-    <label>Crop tighter<input type="range" id="pfzoom" min="40" max="100" value="100"></label>
-    <p class="note">Drag the frame on the picture, or use the arrow keys, to choose what gets printed.</p>
+    <div id="pfcrop"><label>Crop tighter<input type="range" id="pfzoom" min="40" max="100" value="100"></label>
+    <p class="note">Drag the frame on the picture, or use the arrow keys, to choose what gets printed.</p></div>
     <p id="pfout"></p>
     <div class="links"><button class="btn" type="button" id="pfgo">Download print file</button><button class="btn ghost" type="button" id="pfdone">Done</button></div>
     <p class="note" id="pfmsg" role="status"></p>`;
+  $("pffit").value=c.fit;
   const frame=document.createElement("div");frame.className="cropframe";frame.tabIndex=0;frame.setAttribute("aria-label","Crop area: drag it, or move it with the arrow keys");
   view.appendChild(frame);
   const place=()=>{
     if(!frame.isConnected||!img.clientWidth)return; // tool closed, or picture not laid out yet
-    const g=geo(),s=img.clientWidth/it.w;
-    Object.assign(frame.style,{left:img.offsetLeft+g.x*s+"px",top:img.offsetTop+g.y*s+"px",width:g.w*s+"px",height:g.h*s+"px"});
-    c.fx=(g.x+g.w/2)/it.w;c.fy=(g.y+g.h/2)/it.h; // keep the centre where the frame really is
-    $("pfout").innerHTML=`File: <b>${g.outW.toLocaleString()} × ${g.outH.toLocaleString()} px</b> → ${sizeName(o.sys,c.k)} at <span class="b ${g.dpi>=o.dpi?"ok":"bad"}">${g.dpi} dpi ${g.dpi>=o.dpi?"✓":"✗"}</span>`;
+    const g=plan(),s=img.clientWidth/it.w,whole=c.fit==="whole";
+    frame.hidden=whole;$("pfcrop").hidden=whole;
+    if(!whole){
+      Object.assign(frame.style,{left:img.offsetLeft+g.x*s+"px",top:img.offsetTop+g.y*s+"px",width:g.w*s+"px",height:g.h*s+"px"});
+      c.fx=(g.x+g.w/2)/it.w;c.fy=(g.y+g.h/2)/it.h; // keep the centre where the frame really is
+    }
+    const cvt=px=>{const inch=px/g.dpi;return u==="in"?inch.toFixed(1)+" in":(inch*2.54).toFixed(1)+" cm";};
+    const mx=(g.fileW-g.outW)/2,my=(g.fileH-g.outH)/2;
+    $("pfout").innerHTML=`File: <b>${g.fileW.toLocaleString()} × ${g.fileH.toLocaleString()} px</b> → ${sizeName(o.sys,c.k)} at <span class="b ${g.dpi>=o.dpi?"ok":"bad"}">${g.dpi} dpi ${g.dpi>=o.dpi?"✓":"✗"}</span>`
+      +(g.limited?` <span class="note">(${PHONE_CANVAS?"the most a phone or tablet can build; a computer can make it bigger":"the most this browser can build"})</span>`:"")
+      +(whole?`<br><span class="note">The whole picture, centred${mx>=1||my>=1?`, with white margins of ${mx>=my?cvt(mx)+" left and right":cvt(my)+" top and bottom"}`:""}.</span>`:"");
   };
+  iiifInfo(it.iiif).then(d=>{info=d;if(!frame.isConnected)return;if(!c.chosen)c.k=largest();$("pfsize").innerHTML=sizeOptions();place();}).catch(()=>{}); // the server's own grid and limits
   frame.onpointerdown=e=>{
     frame.setPointerCapture(e.pointerId);const x0=e.clientX,y0=e.clientY,fx=c.fx,fy=c.fy;
     frame.onpointermove=ev=>{c.fx=fx+(ev.clientX-x0)/img.clientWidth;c.fy=fy+(ev.clientY-y0)/img.clientHeight;place();};
     frame.onpointerup=frame.onpointercancel=()=>{frame.onpointermove=null;};
   };
   frame.onkeydown=e=>{const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!d)return;e.preventDefault();c.fx+=d[0]*.02;c.fy+=d[1]*.02;place();};
-  $("pfsize").onchange=e=>{c.k=e.target.value;place();};
-  $("pfor").onchange=e=>{c.orient=e.target.value;$("pfsize").innerHTML=sizeOptions();place();};
+  $("pffit").onchange=e=>{c.fit=e.target.value;c.k=largest();$("pfsize").innerHTML=sizeOptions();place();};
+  $("pfsize").onchange=e=>{c.k=e.target.value;c.chosen=true;place();};
+  if($("pfor"))$("pfor").onchange=e=>{c.orient=e.target.value;$("pfsize").innerHTML=sizeOptions();place();};
   $("pfcap").onchange=e=>{c.cap=+e.target.value;place();};
   $("pfzoom").oninput=e=>{c.z=+e.target.value;place();};
   $("pfdone").onclick=closeTools;
@@ -1145,42 +1192,30 @@ function printFile(it,o){
     btn.disabled=true;say("The museum is preparing the file…");ac=new AbortController();const signal=ac.signal;
     try{
       if(!info){info=await iiifInfo(it.iiif);place();} // the crop is cut on the museum's own pixel grid, from its info.json
-      const v3=iiifV3(info),lim=iiifLimits(info),progress=b=>say(`Downloading… ${(b/1e6).toFixed(1)} MB`);
+      const v3=iiifV3(info);
       // one region at one size; the museum's own size: "max" on IIIF 3 servers, "full" on IIIF 2
       const part=(X,Y,W,H,w,h)=>`${it.iiif}/${X},${Y},${W},${H}/${w===W&&h===H?(v3?"max":"full"):`${w},${h}`}/0/default.jpg`;
-      let g=geo(),one=iiifCap(info,g.outW,g.outH),bytes=null,file=null,fullOnly=false; // one = the biggest single file the server sends for this crop
-      let T=Math.floor(Math.min(4096,lim.mw||4096,lim.mh||4096,lim.ma?Math.sqrt(lim.ma):4096)); // the largest piece to ask for
-      url=part(g.X,g.Y,g.W,g.H,one.w,one.h);
-      if(one.w>=g.outW&&one.h>=g.outH){ // one request can carry it: the museum's own JPEG, untouched
-        try{bytes=await fetchBytes(url,signal,progress);}
-        catch(e){
-          if(e.name==="AbortError"||g.outW>=g.W)throw e;
-          // some servers can't scale big pictures (LoC masters answer 500): take every pixel instead
-          g={...g,outW:g.W,outH:g.H};fullOnly=true;one=iiifCap(info,g.W,g.H);url=part(g.X,g.Y,g.W,g.H,one.w,one.h);
-          if(one.w>=g.W&&one.h>=g.H)bytes=await fetchBytes(url,signal,progress);
-        }
+      const single=g=>{const one=iiifCap(info,g.outW,g.outH);return part(g.X,g.Y,g.W,g.H,one.w,one.h);}; // the biggest single file of the crop, for the link if saving fails
+      let g=plan(),file,fullOnly=false;url=single(g);
+      try{file=await makeFile(g,info,part,signal,say);}
+      catch(e){
+        if(e.name==="AbortError"||g.outW>=g.W)throw e;
+        // some servers can't scale big pictures (LoC masters answer 500): take every pixel instead
+        g=plan(c.k,0);fullOnly=true;url=single(g);file=await makeFile(g,info,part,signal,say);
       }
-      if(bytes){
-        const got=sofSize(bytes);
-        if(!got)throw new Error("the museum didn't send a JPEG");
-        if(Math.abs(got.w-g.outW)<=2&&Math.abs(got.h-g.outH)<=2)file={bytes,w:got.w,h:got.h};
-        else if(Math.max(got.w,got.h)>=1000)T=Math.min(T,Math.max(got.w,got.h)); // it quietly sent another size: build the file from pieces no bigger than that
-        else throw new Error(`the museum sent ${got.w}×${got.h} px instead`);
-      }
-      if(!file)file=await stitch(g,T,part,signal,say);
       if(signal.aborted)return; // closed while the file was being built
-      const dpi=Math.round(file.w/g.p.w),small=file.w<g.outW;
+      const dpi=Math.round(file.w/g.p.w),small=file.w<g.fileW;
       const name=`${fileSlug(it.title)}-${sizeName(o.sys,c.k).replace(/×/g,"x").replace(/\s+/g,"")}-${dpi}dpi.jpg`; // e.g. …-50x70cm-300dpi.jpg
-      download(name,setJpegDpi(file.bytes,dpi),"image/jpeg");
-      say(`Saved ${name} (${file.w.toLocaleString()} × ${file.h.toLocaleString()} px, ${(file.bytes.length/1e6).toFixed(1)} MB). It opens at ${sizeName(o.sys,c.k)} size at ${dpi} dpi.${fullOnly?" This museum only sends this crop at full resolution.":""}${small?" This browser can't build a bigger file; Chrome on a computer can.":""}`);
+      download(name,await jpegWithDpi(file.blob,dpi),"image/jpeg");
+      say(`Saved ${name} (${file.w.toLocaleString()} × ${file.h.toLocaleString()} px, ${(file.blob.size/1e6).toFixed(1)} MB). It opens at ${sizeName(o.sys,c.k)} size at ${dpi} dpi.${fullOnly?" This museum only sends this crop at full resolution.":""}${small?" That's the biggest file this browser could build.":""}`);
     }catch(e){
       if(e.name==="AbortError")return;
-      msg.innerHTML=`Couldn't save it from here (${esc(e.message)}).${url?` <a href="${esc(url)}" target="_blank" rel="noopener">Open the cropped file</a> and save it from the new tab (it may be smaller than planned).`:""}`;
+      msg.innerHTML=`Couldn't save it from here (${esc(e.message)}).${url?` <a href="${esc(safeUrl(url))}" target="_blank" rel="noopener">Open the picture from the museum</a> and save it from the new tab (it may be smaller than planned${c.fit==="whole"?", and has no margins":""}).`:""}`;
     }finally{btn.disabled=false;ac=null;}
   };
-  const ro=new ResizeObserver(place);ro.observe(img);img.addEventListener("load",place);
+  const ro=new ResizeObserver(place);ro.observe(img);ro.observe(view);img.addEventListener("load",place); // the picture can move inside its box without changing size
   toolStop=()=>{ro.disconnect();img.removeEventListener("load",place);frame.remove();ac?.abort();};
-  toolOpened();place();frame.focus({preventScroll:true});
+  toolOpened();place();(c.fit==="whole"?$("pffit"):frame).focus({preventScroll:true});
 }
 /* wall preview: the print framed on a wall above a 210 cm sofa, at true relative size */
 const WALLS={"Warm white":"#efebe4","Light grey":"#d8d5cf","Sage":"#b8c2b0","Terracotta":"#c58f74","Navy":"#2e3a4b"};
@@ -1222,15 +1257,15 @@ function wallView(it,o){
   $("mwwall").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;st.wall=b.dataset.v;$("mwwall").querySelectorAll("button").forEach(x=>press(x,x===b));draw();});
   $("mwdone").onclick=closeTools;
   toolStop=()=>{wall.remove();view.classList.remove("walling");view.style.background=bg;};
-  toolOpened();draw();
+  draw();toolOpened(); // draw first, so the scroll lands on the finished panel
 }
 
 /* ---------- boards ---------- */
 /* what a board keeps of an item; also cleans items read from imported backups */
 const snap=x=>({id:String(x.id),src:String(x.src||""),title:String(x.title||"Untitled"),artist:String(x.artist||""),date:String(x.date||""),w:+x.w||0,h:+x.h||0,
   thumb:String(x.thumb||""),page:String(x.page||""),download:String(x.download||""),licence:String(x.licence||""),rights:String(x.rights||""),
-  saved:/^\d{4}-\d{2}-\d{2}$/.test(x.saved)?x.saved:""}); // saved = the day the licence was checked
-const today=()=>new Date().toISOString().slice(0,10);
+  saved:/^\d{4}-\d{2}-\d{2}$/.test(String(x.saved))?String(x.saved):""}); // saved = the day the licence was checked
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}; // the viewer's own date, not UTC
 function updateBoardsBtn(){$("boardsbtn").textContent=`Boards (${boards.length})${savedIds.size?" · "+savedIds.size+" saved":""}`;}
 function refreshStars(id){const c=cardCache.get(id);if(c)syncStar(c,id);updateBoardsBtn();}
 function newBoard(name){const b={id:newId(),name:name.trim().slice(0,60)||"Untitled board",items:[]};boards.push(b);saveBoards();return b;}
@@ -1334,7 +1369,7 @@ function licenceRecord(b){
   const fmtDay=d=>d?new Date(d+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"long",year:"numeric"}):"not recorded";
   const items=b.items.map(x=>`<div class="item"><img src="${esc(x.thumb)}" alt="" referrerpolicy="no-referrer"><div><b>${esc(x.title)}</b><div class="by">${esc(x.artist||"Unknown")}${x.date?" · "+esc(x.date):""}</div><dl>
     <dt>Source</dt><dd>${esc(SRC[x.src]?.name||x.src)}</dd>
-    <dt>Licence</dt><dd>${esc(x.licence||"—")}</dd>
+    <dt>Licence</dt><dd>${esc(x.licence||"—")}${SRC[x.src]&&!SRC[x.src].vetted?` <b class="warn">— this source's licence tags vary: check the file page before selling</b>`:""}</dd>
     <dt>Rights statement</dt><dd>${link(x.rights)}</dd>
     <dt>Museum page</dt><dd>${link(x.page)}</dd>
     <dt>Image file</dt><dd>${link(x.download)}</dd>
@@ -1345,11 +1380,11 @@ body{font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:#1d1b18;
 h1{font:600 21px/1.2 Georgia,serif;margin:0 0 6px}.intro{color:#6f6a61;margin:0 0 14px}
 .item{display:grid;grid-template-columns:110px 1fr;gap:16px;padding:14px 0;border-top:1px solid #e3ded3;break-inside:avoid}
 img{width:110px;height:110px;object-fit:contain;background:#efebe2}.by{color:#6f6a61}
-dl{display:grid;grid-template-columns:130px 1fr;gap:2px 10px;margin:8px 0 0}dt{color:#6f6a61}dd{margin:0;overflow-wrap:anywhere}a{color:#2f5d50}
+dl{display:grid;grid-template-columns:130px 1fr;gap:2px 10px;margin:8px 0 0}dt{color:#6f6a61}dd{margin:0;overflow-wrap:anywhere}a{color:#2f5d50}.warn{color:#8a4b12}
 button{font:inherit;font-weight:600;background:#2f5d50;color:#fff;border:0;border-radius:8px;padding:8px 16px;margin:0 0 16px;cursor:pointer}
 @media print{button{display:none}body{margin:0}}</style></head><body>
 <h1>Licence record: ${esc(b.name)}</h1>
-<p class="intro">${b.items.length} image${b.items.length>1?"s":""} · made ${fmtDay(today())} with Print Finder. Each image was listed by its source as public domain, CC0 or free of known restrictions on the date shown under “Licence checked”. Keep this record with your files, and look at the museum page again before a large print run.</p>
+<p class="intro">${b.items.length} image${b.items.length>1?"s":""} · made ${fmtDay(today())} with Print Finder. Each image was listed by its source as public domain, CC0 or free of known restrictions on the date shown under “Licence checked”${b.items.some(x=>SRC[x.src]&&!SRC[x.src].vetted)?"; images marked “check the file page” come from a source whose licence tags aren't reliable, so confirm those yourself":""}. Keep this record with your files, and look at the museum page again before a large print run.</p>
 <button onclick="print()">Print or save as PDF</button>${items}</body></html>`;
   const url=URL.createObjectURL(new Blob([html],{type:"text/html"}));
   if(!open(url,"_blank"))download(`licence-record-${(b.name.replace(/[^\w-]+/g,"-").replace(/^-+|-+$/g,"")||"board")}.html`,html,"text/html"); // popup blocked: save the page instead
