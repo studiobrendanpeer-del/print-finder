@@ -337,6 +337,7 @@ const CC0="https://creativecommons.org/publicdomain/zero/1.0/";
 const ccUrl=s=>String(s||"").split(/\s+/).find(x=>/^https?:\/\/(www\.)?(creativecommons\.org|rightsstatements\.org)\//.test(x))||""; // first licence link in a list of ids
 const AIC_MIN=Math.min(...Object.keys(SYSTEMS).map(k=>need(150,k).needS)); // smallest short side of any system at the lowest dpi on offer
 const NGA_PAGE=200;
+const NGA_ONE=4096; // NGA's image server sends at most this many px a side per picture (not stated in its info.json; bigger w,h requests come back squashed)
 /* search text for Lucene-style engines (Mia, Smithsonian): plain words only, so it can't cancel the public-domain clause ("forget me NOT") */
 const plainWords=q=>q.replace(/[+\-=&|<>!(){}[\]^"~*?:\\/]/g," ").replace(/\b(AND|OR|NOT)\b/g,m=>m.toLowerCase()).trim();
 /* National Gallery index: one array per field (smaller and faster to read than rows); artist and medium are numbers into shared lists */
@@ -677,7 +678,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
     return {items,more:!!d.pagination?.next};
   },
 
-  /* National Gallery of Art: searched locally in the open-data index (nga-index.json), handed out in pages like the other sources */
+  /* National Gallery of Art: searched locally in the open-data index (nga-index-v2.json), handed out in pages like the other sources */
   async nga(o,page,_,st){
     const X=await loadNGA();
     if(!st.list){
@@ -696,7 +697,8 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
       const iiif="https://api.nga.gov/iiif/"+X.id[i].replace(/^(.{8})(.{4})(.{4})(.{4})/,"$1-$2-$3-$4-"); // ids are stored without dashes
       return {id:"nga-"+X.oid[i],src:"nga",title:X.title[i],artist:X.artists[X.artist[i]],year:X.y0[i],date:X.date[i],medium:X.media[X.medium[i]],w:X.w[i],h:X.h[i],
         thumb:iiif+"/full/!400,400/0/default.jpg",preview:iiif+"/full/!1200,1200/0/default.jpg",iiif,
-        page:"https://www.nga.gov/collection/art-object-page."+X.oid[i]+".html",download:iiif+"/full/max/0/default.jpg",licence:"CC0",rights:CC0};
+        page:"https://www.nga.gov/collection/art-object-page."+X.oid[i]+".html",download:iiif+"/full/max/0/default.jpg",licence:"CC0",rights:CC0,
+        sizeNote:Math.max(X.w[i],X.h[i])>NGA_ONE?`The museum's server sends at most ${NGA_ONE.toLocaleString()} px per side in one file, so “Full-size file” is smaller than this. “Make print file…” joins pieces to use every pixel.`:""};
     });
     return {items,more:(page+1)*NGA_PAGE<st.list.length};
   },
@@ -975,7 +977,7 @@ function openDetail(it){
     try{const d=await iiifInfo(it.iiif);if(!cell.isConnected)return;
       const w0=+d.width,h0=+d.height;if(!(w0>0&&h0>0))throw new Error("no size given");
       const {w,h}=iiifCap(d,w0,h0),g=fit({w,h},o);
-      cell.innerHTML=`${fmtPx({w,h})} → <span class="b ${g.pass?"ok":"bad"}">${g.pass?"max "+sizeName(o.sys,g.max):"below "+sizeName(o.sys,sizeKeys(o.sys)[0])} at ${o.dpi} dpi</span>`;
+      cell.innerHTML=`${fmtPx({w,h})}${w<w0||h<h0?" in one file":""} → <span class="b ${g.pass?"ok":"bad"}">${g.pass?"max "+sizeName(o.sys,g.max):"below "+sizeName(o.sys,sizeKeys(o.sys)[0])} at ${o.dpi} dpi</span>${w<w0||h<h0?`<div class="note">“Make print file…” joins pieces to use all ${fmtPx({w:w0,h:h0})} px.</div>`:""}`;
     }catch(e){if(cell.isConnected)cell.textContent="Couldn't check ("+e.message+")";}
   };
   $("pix").onclick=()=>{
@@ -1007,9 +1009,16 @@ function iiifInfo(base){ // a picture's info.json, fetched once
   return infoCache.get(base);
 }
 const iiifV3=d=>d.type==="ImageService3"||/image\/3\//.test(String(d["@context"]));
-/* the largest w×h (same shape) the server will send; IIIF: a maxWidth on its own also caps the height */
+/* the most one request can ask for: the server's stated limits, or a cap we know it applies without saying so; IIIF: a maxWidth on its own also caps the height */
+function iiifLimits(d){
+  const p=Array.isArray(d.profile)&&d.profile[1]||{};let host="";
+  try{host=new URL(d["@id"]||d.id).host}catch(e){}
+  const mw=d.maxWidth||p.maxWidth||(host==="api.nga.gov"?NGA_ONE:0);
+  return {mw,mh:d.maxHeight||p.maxHeight||mw,ma:d.maxArea||p.maxArea};
+}
+/* the largest w×h (same shape) the server will send in one picture */
 function iiifCap(d,w,h){
-  const p=Array.isArray(d.profile)&&d.profile[1]||{},mw=d.maxWidth||p.maxWidth,mh=d.maxHeight||p.maxHeight||mw,ma=d.maxArea||p.maxArea;
+  const {mw,mh,ma}=iiifLimits(d);
   if(mw&&w>mw){h=h*mw/w;w=mw}
   if(mh&&h>mh){w=w*mh/h;h=mh}
   if(ma&&w*h>ma){const k=Math.sqrt(ma/(w*h));w*=k;h*=k}
@@ -1037,6 +1046,48 @@ let toolStop=null; // undoes whatever the open tool added to the picture area
 function closeTools(){if(toolStop){toolStop();toolStop=null;}const t=$("tool");if(t)t.replaceChildren();$("dbody").querySelector(".dlg")?.classList.remove("tooling");}
 /* a tool has opened: pin the picture on phones and scroll its controls into view */
 function toolOpened(){$("dbody").querySelector(".dlg").classList.add("tooling");$("tool").scrollIntoView({block:"start",behavior:"smooth"});}
+/* a file's bytes, reporting progress as they arrive */
+async function fetchBytes(url,signal,progress){
+  const r=await fetch(url,{signal});if(!r.ok)throw new Error("HTTP "+r.status);
+  const rd=r.body.getReader(),parts=[];let got=0;
+  for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;progress?.(got);}
+  const b=new Uint8Array(got);let at=0;for(const part of parts){b.set(part,at);at+=part.length;}
+  return b;
+}
+/* the biggest canvas this browser will make, up to w×h and the same shape (Safari on phones stops near 16.7 MP; past its limit drawing fails silently) */
+function canvasFor(w,h){
+  for(let k=1;k>.1;k*=.85){
+    const cv=document.createElement("canvas");cv.width=Math.floor(w*k);cv.height=Math.floor(h*k);
+    try{const cx=cv.getContext("2d");cx.fillRect(cv.width-1,cv.height-1,1,1);if(cx.getImageData(cv.width-1,cv.height-1,1,1).data[3]===255)return cv;}catch(e){}
+    cv.width=cv.height=0; // let the memory go
+  }
+  return null;
+}
+/* a crop too big for one request: fetched in pieces at the final size and joined on a canvas, then saved as a high-quality JPEG.
+   g = the crop (X,Y,W,H on the museum's grid) and the file (outW×outH); T = the largest piece the server sends */
+async function stitch(g,T,part,signal,say){
+  const cv=canvasFor(g.outW,g.outH);if(!cv)throw new Error("this browser can't build a file this large");
+  const fw=cv.width,fh=cv.height,cx=cv.getContext("2d");cx.imageSmoothingQuality="high";
+  const M=fw<g.W?8:0,B=T-2*M,cols=Math.ceil(fw/B),rows=Math.ceil(fh/B); // pieces the server scales get an 8 px margin, so their edges can't show as seams
+  const fx=i=>Math.floor(i*fw/cols),fy=j=>Math.floor(j*fh/rows); // piece edges in the file…
+  const sx=v=>g.X+Math.round(v*g.W/fw),sy=v=>g.Y+Math.round(v*g.H/fh); // …and on the museum's grid
+  let n=0,mb=0;
+  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+    const x0=fx(i),y0=fy(j),x1=fx(i+1),y1=fy(j+1);
+    const ex0=Math.max(0,x0-M),ey0=Math.max(0,y0-M),ex1=Math.min(fw,x1+M),ey1=Math.min(fh,y1+M),ow=ex1-ex0,oh=ey1-ey0; // the piece with its margin
+    const X=sx(ex0),Y=sy(ey0),W=sx(ex1)-X,H=sy(ey1)-Y,label=`Downloading piece ${++n} of ${cols*rows}…`,base=mb;
+    say(label);
+    const bytes=await fetchBytes(part(X,Y,W,H,ow,oh),signal,b=>say(`${label} ${((base+b)/1e6).toFixed(1)} MB`));mb+=bytes.length;
+    const bmp=await createImageBitmap(new Blob([bytes],{type:"image/jpeg"}));
+    if(Math.abs(bmp.width-ow)>2||Math.abs(bmp.height-oh)>2){bmp.close();throw new Error("the museum sent a piece at the wrong size");}
+    const kx=bmp.width/ow,ky=bmp.height/oh;
+    cx.drawImage(bmp,(x0-ex0)*kx,(y0-ey0)*ky,(x1-x0)*kx,(y1-y0)*ky,x0,y0,x1-x0,y1-y0);bmp.close();
+  }
+  say("Building the file…");
+  const blob=await new Promise(r=>cv.toBlob(r,"image/jpeg",.95));cv.width=cv.height=0;
+  if(!blob)throw new Error("this browser can't build a file this large");
+  return {bytes:new Uint8Array(await blob.arrayBuffer()),w:fw,h:fh};
+}
 /* print-ready file: a crop with the sheet's exact shape, cut by the museum's image server at full resolution */
 function printFile(it,o){
   closeTools();
@@ -1046,16 +1097,17 @@ function printFile(it,o){
   const c={k:[...keys].reverse().find(k=>fillDpi(k,"auto")>=o.dpi)||keys[0],orient:"auto",z:100,fx:.5,fy:.5,cap:300};
   let info=null,ac=null;
   iiifInfo(it.iiif).then(d=>{info=d;place();}).catch(()=>{});
-  // the crop (x,y,w,h in picture pixels) and the file it gives: W×H pixels on the museum's own grid, scaled down to the chosen resolution and the server's limits
+  // the crop: x,y,w,h in picture pixels; X,Y,W,H the same on the museum's own grid; outW×outH the file, scaled down only to the chosen resolution
   const geo=()=>{
     const p=sheet(o.sys,c.k,it,c.orient),a=p.w/p.h;
     let w,h;if(it.w/it.h>a){h=it.h;w=h*a}else{w=it.w;h=w/a}
     w*=c.z/100;h*=c.z/100;
     const x=clamp(c.fx*it.w-w/2,0,it.w-w),y=clamp(c.fy*it.h-h/2,0,it.h-h);
-    const k=info?info.width/it.w:1,W=w*k,H=h*k; // sizes can come from another record of the same picture
-    const dpi0=c.cap?Math.min(c.cap,W/p.w):W/p.w,want={w:p.w*dpi0,h:p.h*dpi0};
-    const out=info?iiifCap(info,want.w,want.h):{w:Math.floor(want.w),h:Math.floor(want.h)};
-    return {x,y,w,h,k,p,W,H,outW:out.w,outH:out.h,dpi:out.w/p.w,capped:!!info&&out.w<Math.floor(want.w)};
+    const k=info?info.width/it.w:1,iw=info?+info.width:it.w,ih=info?+info.height:it.h; // sizes can come from another record of the same picture
+    const W=clamp(Math.round(w*k),1,iw),H=clamp(Math.round(h*k),1,ih),X=clamp(Math.round(x*k),0,iw-W),Y=clamp(Math.round(y*k),0,ih-H);
+    const s=c.cap?Math.min(1,c.cap*p.w/W):1; // 1 = every pixel the museum has
+    const outW=s<1?Math.round(W*s):W,outH=s<1?Math.round(H*s):H;
+    return {x,y,w,h,X,Y,W,H,p,outW,outH,dpi:Math.round(outW/p.w)};
   };
   const sizeOptions=()=>keys.map(k=>{const d=fillDpi(k,c.orient);
     return `<option value="${k}" ${k===c.k?"selected":""}>${sizeName(o.sys,k)} — up to ${d} dpi ${d>=o.dpi?"✓":"✗"}</option>`;}).join("");
@@ -1075,7 +1127,7 @@ function printFile(it,o){
     const g=geo(),s=img.clientWidth/it.w;
     Object.assign(frame.style,{left:img.offsetLeft+g.x*s+"px",top:img.offsetTop+g.y*s+"px",width:g.w*s+"px",height:g.h*s+"px"});
     c.fx=(g.x+g.w/2)/it.w;c.fy=(g.y+g.h/2)/it.h; // keep the centre where the frame really is
-    $("pfout").innerHTML=`File: <b>${g.outW.toLocaleString()} × ${g.outH.toLocaleString()} px</b> → ${sizeName(o.sys,c.k)} at <span class="b ${g.dpi>=o.dpi?"ok":"bad"}">${Math.round(g.dpi)} dpi ${g.dpi>=o.dpi?"✓":"✗"}</span>${g.capped?' <span class="note">(the museum limits how large a file it sends)</span>':""}`;
+    $("pfout").innerHTML=`File: <b>${g.outW.toLocaleString()} × ${g.outH.toLocaleString()} px</b> → ${sizeName(o.sys,c.k)} at <span class="b ${g.dpi>=o.dpi?"ok":"bad"}">${g.dpi} dpi ${g.dpi>=o.dpi?"✓":"✗"}</span>`;
   };
   frame.onpointerdown=e=>{
     frame.setPointerCapture(e.pointerId);const x0=e.clientX,y0=e.clientY,fx=c.fx,fy=c.fy;
@@ -1089,22 +1141,41 @@ function printFile(it,o){
   $("pfzoom").oninput=e=>{c.z=+e.target.value;place();};
   $("pfdone").onclick=closeTools;
   $("pfgo").onclick=async()=>{
-    const g=geo(),msg=$("pfmsg"),btn=$("pfgo"),d=info||await iiifInfo(it.iiif).catch(()=>null);
-    const v3=d?iiifV3(d):false,X=Math.round(g.x*g.k),Y=Math.round(g.y*g.k),W=Math.round(g.W),H=Math.round(g.H);
-    const size=g.outW>=W?(v3?"max":"full"):`${g.outW},${g.outH}`; // full resolution: "max" on IIIF 3 servers, "full" on IIIF 2
-    const url=`${it.iiif}/${X},${Y},${W},${H}/${size}/0/default.jpg`,dpi=Math.round(g.outW/g.p.w);
-    const name=`${fileSlug(it.title)}-${sizeName(o.sys,c.k).replace(/×/g,"x").replace(/\s+/g,"")}-${dpi}dpi.jpg`; // e.g. …-50x70cm-300dpi.jpg
-    btn.disabled=true;msg.textContent="The museum is preparing the file…";ac=new AbortController();
+    const msg=$("pfmsg"),btn=$("pfgo"),say=t=>{msg.textContent=t};let url="";
+    btn.disabled=true;say("The museum is preparing the file…");ac=new AbortController();const signal=ac.signal;
     try{
-      const r=await fetch(url,{signal:ac.signal});if(!r.ok)throw new Error("HTTP "+r.status);
-      const rd=r.body.getReader(),parts=[];let got=0;
-      for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;msg.textContent=`Downloading… ${(got/1e6).toFixed(1)} MB`;}
-      const bytes=new Uint8Array(got);let at=0;for(const part of parts){bytes.set(part,at);at+=part.length;}
-      download(name,setJpegDpi(bytes,dpi),"image/jpeg");
-      msg.textContent=`Saved ${name} (${(got/1e6).toFixed(1)} MB). It opens at ${sizeName(o.sys,c.k)} size at ${dpi} dpi.`;
+      if(!info){info=await iiifInfo(it.iiif);place();} // the crop is cut on the museum's own pixel grid, from its info.json
+      const v3=iiifV3(info),lim=iiifLimits(info),progress=b=>say(`Downloading… ${(b/1e6).toFixed(1)} MB`);
+      // one region at one size; the museum's own size: "max" on IIIF 3 servers, "full" on IIIF 2
+      const part=(X,Y,W,H,w,h)=>`${it.iiif}/${X},${Y},${W},${H}/${w===W&&h===H?(v3?"max":"full"):`${w},${h}`}/0/default.jpg`;
+      let g=geo(),one=iiifCap(info,g.outW,g.outH),bytes=null,file=null,fullOnly=false; // one = the biggest single file the server sends for this crop
+      let T=Math.floor(Math.min(4096,lim.mw||4096,lim.mh||4096,lim.ma?Math.sqrt(lim.ma):4096)); // the largest piece to ask for
+      url=part(g.X,g.Y,g.W,g.H,one.w,one.h);
+      if(one.w>=g.outW&&one.h>=g.outH){ // one request can carry it: the museum's own JPEG, untouched
+        try{bytes=await fetchBytes(url,signal,progress);}
+        catch(e){
+          if(e.name==="AbortError"||g.outW>=g.W)throw e;
+          // some servers can't scale big pictures (LoC masters answer 500): take every pixel instead
+          g={...g,outW:g.W,outH:g.H};fullOnly=true;one=iiifCap(info,g.W,g.H);url=part(g.X,g.Y,g.W,g.H,one.w,one.h);
+          if(one.w>=g.W&&one.h>=g.H)bytes=await fetchBytes(url,signal,progress);
+        }
+      }
+      if(bytes){
+        const got=sofSize(bytes);
+        if(!got)throw new Error("the museum didn't send a JPEG");
+        if(Math.abs(got.w-g.outW)<=2&&Math.abs(got.h-g.outH)<=2)file={bytes,w:got.w,h:got.h};
+        else if(Math.max(got.w,got.h)>=1000)T=Math.min(T,Math.max(got.w,got.h)); // it quietly sent another size: build the file from pieces no bigger than that
+        else throw new Error(`the museum sent ${got.w}×${got.h} px instead`);
+      }
+      if(!file)file=await stitch(g,T,part,signal,say);
+      if(signal.aborted)return; // closed while the file was being built
+      const dpi=Math.round(file.w/g.p.w),small=file.w<g.outW;
+      const name=`${fileSlug(it.title)}-${sizeName(o.sys,c.k).replace(/×/g,"x").replace(/\s+/g,"")}-${dpi}dpi.jpg`; // e.g. …-50x70cm-300dpi.jpg
+      download(name,setJpegDpi(file.bytes,dpi),"image/jpeg");
+      say(`Saved ${name} (${file.w.toLocaleString()} × ${file.h.toLocaleString()} px, ${(file.bytes.length/1e6).toFixed(1)} MB). It opens at ${sizeName(o.sys,c.k)} size at ${dpi} dpi.${fullOnly?" This museum only sends this crop at full resolution.":""}${small?" This browser can't build a bigger file; Chrome on a computer can.":""}`);
     }catch(e){
       if(e.name==="AbortError")return;
-      msg.innerHTML=`Couldn't save it from here (${esc(e.message)}). <a href="${esc(url)}" target="_blank" rel="noopener">Open the cropped file</a> and save it from the new tab; set the print size to ${dpi} dpi in your software.`;
+      msg.innerHTML=`Couldn't save it from here (${esc(e.message)}).${url?` <a href="${esc(url)}" target="_blank" rel="noopener">Open the cropped file</a> and save it from the new tab (it may be smaller than planned).`:""}`;
     }finally{btn.disabled=false;ac=null;}
   };
   const ro=new ResizeObserver(place);ro.observe(img);img.addEventListener("load",place);
