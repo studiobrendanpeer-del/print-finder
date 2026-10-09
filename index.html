@@ -841,7 +841,7 @@ const formState=()=>({q:$("q").value,medium:$("medium").value,from:$("from").val
 function run(push=true){
   const o=opts();
   store.set("pf_form",{...formState(),dpi:String(o.dpi),mode:o.mode,sys:o.sys,lic:o.lic,eukey:$("eukey").value,sikey:$("sikey").value});
-  if(push)history[history.state?"pushState":"replaceState"](formState(),""); // Back returns to the previous search
+  if(push)history[history.state?"pushState":"replaceState"](formState(),"",searchUrl(formState())); // Back returns to the previous search; the address can be bookmarked
   showNeed();runId++;searched=o;endLook();results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;view.order=[];lastFetchAt=-1;lastList=[];
   o.srcs.forEach(k=>state[k]={page:0,more:true,rounds:0});
   cardCache.clear();$("grid").replaceChildren();$("tools").hidden=false;
@@ -991,6 +991,11 @@ function lookMsg(){
   $("lookmsg").hidden=false;
   $("lookmsg").textContent=`Sorted by look against “${look.ref.title}”${look.todo.length?` · comparing… ${look.todo.length} to go`:""}${bad?` · ${bad} couldn't be read (their museum blocks it) and are listed last`:""}. Compares colour, tone, contrast and layout, not subject.`;
 }
+/* "Similar look" opens a new tab that re-runs this search and sorts it against the picture (handed over through storage, then removed) */
+function lookInNewTab(it){
+  const id=newId();store.set("pf_look_"+id,it);
+  open(searchUrl(searched||formState(),{look:id}),"_blank","noopener");
+}
 async function lookLike(it){
   const opt=$("sort").querySelector('[value="look"]');
   if(!look.feat.get(it.id))await lookOne(it);
@@ -1016,11 +1021,13 @@ const surname=a=>{
   if(!f||/\d|century|school|workshop|circle|follower|manner|culture|unknown|anonymous|unidentified|various/i.test(f))return "";
   const n=f.split(/\s+/).filter(w=>/^\p{Lu}/u.test(w));return n.length?n[n.length-1]:"";
 };
-function searchFor({q="",medium="",from=null,to=null}){
-  $("q").value=q;$("medium").value=medium;$("from").value=from??"";$("to").value=to??"";
-  if($("dlg").open)$("dlg").close();
-  run();toResults();
-}
+/* a search as a web address (?q=…&medium=…&from=…&to=…), so it can be bookmarked or opened in its own tab */
+const searchUrl=({q="",medium="",from=null,to=null},extra={})=>{
+  const p=new URLSearchParams();if(q)p.set("q",q);if(medium)p.set("medium",medium);if(from!=null&&from!=="")p.set("from",from);if(to!=null&&to!=="")p.set("to",to);
+  for(const k in extra)p.set(k,extra[k]);const qs=p.toString();return location.pathname+(qs?"?"+qs:"");
+};
+/* "find similar" searches open in a new tab, so the current search stays as it is */
+function searchFor(args){open(searchUrl(args),"_blank","noopener");}
 function similar(it){
   const w=titleWords(it).sort((a,b)=>b.length-a.length)[0]||surname(it.artist)||"";
   searchFor({q:w,medium:mediumOf(it)}); // subject word + medium; era left open so it doesn't come back empty
@@ -1059,7 +1066,7 @@ function openDetail(it){
   { // one chip per title word, the artist, and a broad "same medium & era" search
     const m=mediumOf(it),era=it.year?{from:it.year-30,to:it.year+30}:{},sn=surname(it.artist),box=$("simchips");
     const chip=(label,args)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=label;b.onclick=()=>searchFor(args);box.appendChild(b);};
-    {const b=document.createElement("button");b.type="button";b.className="chip on";b.textContent="◐ Similar look";b.title="Re-sort the loaded results by colour, tone, contrast and layout next to this picture";b.onclick=()=>lookLike(it);box.appendChild(b);}
+    {const b=document.createElement("button");b.type="button";b.className="chip on";b.textContent="◐ Similar look";b.title="Re-sort the loaded results by colour, tone, contrast and layout next to this picture";b.onclick=()=>lookInNewTab(it);box.appendChild(b);}
     titleWords(it).slice(0,6).forEach(w=>chip(w,{q:w,medium:m,...era}));
     if(sn)chip("by "+sn,{q:sn});
     if(m||it.year)chip(`any ${m||"work"}${it.year?` ${era.from}–${era.to}`:""}`,{medium:m,...era});
@@ -1507,6 +1514,17 @@ $("selftest").onclick=async()=>{
     }catch(e){if(cell())cell().innerHTML=`<span class="b bad">Failed</span> ${esc(e.message)}`;}
   }));
 };
+/* a search in the address (from a bookmark or a "find similar" tab) runs straight away */
+{
+  const p=new URLSearchParams(location.search),look=p.get("look");
+  if(["q","medium","from","to"].some(k=>p.has(k))){
+    ["q","medium","from","to"].forEach(k=>$(k).value=p.get(k)??"");
+    run(false);history.replaceState(formState(),"",searchUrl(formState()));
+    const it=look&&store.get("pf_look_"+look,null);
+    if(look)try{localStorage.removeItem("pf_look_"+look)}catch(e){}
+    if(it&&it.id)lookLike(it);
+  }
+}
 </script>
 </body>
 </html>
