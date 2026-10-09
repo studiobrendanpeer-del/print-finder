@@ -140,7 +140,7 @@ td:first-child{color:var(--muted);width:42%;padding-right:8px}
     <label>Theme / keywords<input id="q" type="text" placeholder="one or two words, e.g. iris" value="botanical"></label>
     <label>Medium<select id="medium">
       <option value="">Any</option><option value="painting">Painting</option><option value="drawing">Drawing / watercolour</option>
-      <option value="print">Print (engraving, woodcut, litho)</option><option value="photograph">Photograph</option></select></label>
+      <option value="print">Print (engraving, woodcut, litho)</option><option value="photograph">Photograph</option><option value="graphic">Poster / graphic design</option></select></label>
     <label>From year<input id="from" type="number" placeholder="any"></label>
     <label>To year<input id="to" type="number" placeholder="any"></label>
   </div>
@@ -190,8 +190,12 @@ const MED={
   painting:{cma:"Painting",aic:"Painting",met:"Paintings",getty:"300033618",loc:"paintings",mia:"Paintings",wellcome:"Paintings,Oil paintings,Watercolor painting,Gouaches",re:/paint|oil|tempera|maleri|olie/i},
   drawing:{cma:"Drawing",aic:"Drawing and Watercolor",met:"Drawings",getty:"300033973",loc:"drawings",mia:"Drawings",wellcome:"Drawings,Ink drawings,Chalk drawings,Sketches,Watercolor painting,Gouaches",re:/draw|watercol|gouache|tegning|akvarel|chalk|pastel/i},
   print:{cma:"Print",aic:"Print",met:"Prints",getty:"300041273",loc:"",mia:"Prints",wellcome:"Prints,Engraving and Engravings,Etching,Lithography,Wood engravings,Woodcuts,Stipple engraving,Intaglio prints,Aquatint,Chromolithography,Portrait prints",re:/print|engrav|etch|woodcut|woodblock|lithog|mezzotint|aquatint|grafik|kobberstik|træsnit|radering|litografi/i},
-  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",loc:"",mia:"Photographs",wellcome:"Photographs,Photographic prints,Portrait photographs,Albumen prints,Gelatin silver prints",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i}
+  photograph:{cma:"Photograph",aic:"Photograph",met:"Photographs",getty:"300046300",loc:"",mia:"Photographs",wellcome:"Photographs,Photographic prints,Portrait photographs,Albumen prints,Gelatin silver prints",re:/photo|albumen|gelatin|daguerre|cyanotype|fotografi/i},
+  // posters, flyers, adverts: only these four have a poster category; every other source searches with the word "poster" added (see srcOpts)
+  graphic:{met:"Posters",getty:"300027221",loc:"posters",wellcome:"Posters",re:/poster|affiche|plakat|placard|broadside|advert|flyer|handbill|reklame|show ?card|ephemera|graphic design/i}
 };
+/* the search as one source sees it: a medium it has no category for becomes a search word instead */
+const srcOpts=(k,o)=>o.medium==="graphic"&&!MED.graphic[k]?{...o,q:(o.q+" poster").trim(),medium:""}:o;
 /* vetted: every result is checked for a public-domain / CC0 licence; Wikimedia's licence tags are not reliable */
 const SOURCES=[
   {key:"rijks",name:"Rijksmuseum",vetted:true},
@@ -669,7 +673,7 @@ SELECT ?o (SAMPLE(?l) AS ?label) (SAMPLE(?vi) AS ?v) (SAMPLE(?pg) AS ?page) (SAM
       const w=+info.width,h=+info.height;if(!(w>0&&h>0))return null;
       const g=[...arr(it.genre),...arr(it.formats).map(x=>x.title||x),...arr(r.original_format)].filter(Boolean).join(" · ");
       const k=gmd?"Map":kind([...arr(it.genre),...arr(it.formats).map(x=>x.title||x)].join(" "));
-      if(o.medium&&k.toLowerCase()!==o.medium)return null;
+      if(o.medium&&o.medium!=="graphic"&&k.toLowerCase()!==o.medium)return null; // posters are already picked by subject
       const big=svc.length?svc[svc.length-1]:null,small=svc.find(u=>/r\.jpg$/.test(u))||big;
       const id=String(r.id||r.url).replace(/\/$/,"").split("/").pop();
       return {id:"loc-"+id,src:"loc",title:r.title||it.title||"Untitled",
@@ -747,6 +751,7 @@ function keep(it,o){
   if(o.lic!=="all"&&!SRC[it.src].vetted)return false;
   if(!fitOf(it,o).pass)return false;
   if(it.clientMedium&&o.medium&&!MED[o.medium].re.test(it.medium))return false;
+  if(o.medium==="graphic"&&!MED.graphic[it.src]&&(!MED.graphic.re.test(it.title+" "+it.medium)||/poster ?(paint|colou?r)|photo|gelatin/i.test(it.medium)))return false; // searched by the word "poster": keep only what says so (not poster paint or photos of posters)
   if(it.clientEra&&(o.from!=null||o.to!=null)){
     if(it.year==null)return it.src==="wm";
     if(o.from!=null&&it.year<o.from)return false;
@@ -802,7 +807,7 @@ async function sourceLoop(k,id){
   while(id===runId&&s.more&&!s.err&&s.rounds<4&&bySource(filtered(cur())).length<view.limit+PAGE){
     s.busy=true;s.rounds++;scheduleRender();
     try{
-      const r=await adapters[k](cur(),s.page,false,s);if(id!==runId)return;
+      const r=await adapters[k](srcOpts(k,cur()),s.page,false,s);if(id!==runId)return;
       s.page++;s.more=!!r.more;
       for(const it of r.items){if(seen.has(it.id))continue;seen.add(it.id);it.w=+it.w||0;it.h=+it.h||0;it.srank=s.count=(s.count||0)+1;results.push(it);}
     }catch(e){if(id!==runId)return;s.err=e.message||"network";s.more=false;}
