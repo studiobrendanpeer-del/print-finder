@@ -159,11 +159,12 @@ td:first-child{color:var(--muted);width:42%;padding-right:8px}
 </form>
 <div id="status"></div>
 <div class="row" id="tools" hidden style="margin:0 0 14px">
-  <label>Sort<select id="sort"><option value="best">Best match</option><option value="res">Largest print size</option><option value="mp">Most pixels</option><option value="early">Earliest first</option><option value="late">Latest first</option><option value="title">Title A–Z</option></select></label>
+  <label>Sort<select id="sort"><option value="best">Best match</option><option value="res">Largest print size</option><option value="mp">Most pixels</option><option value="early">Earliest first</option><option value="late">Latest first</option><option value="title">Title A–Z</option><option value="look" hidden>Looks like…</option></select></label>
   <div class="chips" id="orients" role="group" aria-label="Shape"><button type="button" class="chip on" aria-pressed="true" data-v="">Any shape</button><button type="button" class="chip" aria-pressed="false" data-v="portrait">Portrait</button><button type="button" class="chip" aria-pressed="false" data-v="landscape">Landscape</button><button type="button" class="chip" aria-pressed="false" data-v="square">Square-ish</button></div>
   <div class="chips"><button type="button" class="chip on" aria-pressed="true" id="artonly" title="Hides ceramics, sculpture, furniture, costume, coins and other 3-D objects">Artworks only</button></div>
   <div class="chips" id="mins" role="group" aria-label="Minimum print size"></div>
 </div>
+<p class="note" id="lookmsg" role="status" hidden></p>
 <div class="grid" id="grid"></div>
 <div class="empty" id="empty">Press Search to find printable images.</div>
 <div class="more" id="more" hidden><span id="moretxt"></span><button class="btn ghost" type="button" id="deeper" hidden>Search deeper</button></div>
@@ -787,7 +788,8 @@ function visible(o,base=filtered(o)){
     res:(a,b)=>fitOf(b,o).rank-fitOf(a,o).rank||b.w*b.h-a.w*a.h,
     early:(a,b)=>yr(a,1)-yr(b,1),late:(a,b)=>yr(b,-1)-yr(a,-1),
     title:(a,b)=>String(a.title).localeCompare(String(b.title)),
-    mp:(a,b)=>b.w*b.h-a.w*a.h}[view.sort];
+    mp:(a,b)=>b.w*b.h-a.w*a.h,
+    look:(a,b)=>lookDist(a)-lookDist(b)||miss.get(a)-miss.get(b)||a.srank-b.srank}[view.sort];
   // cards the viewer has already scrolled past keep their place; later arrivals are sorted after them
   const pos=new Map(view.order.map((id,i)=>[id,i]));
   return l.sort(pos.size?(a,b)=>(pos.get(a.id)??1e9)-(pos.get(b.id)??1e9)||by(a,b):by);
@@ -840,7 +842,7 @@ function run(push=true){
   const o=opts();
   store.set("pf_form",{...formState(),dpi:String(o.dpi),mode:o.mode,sys:o.sys,lic:o.lic,eukey:$("eukey").value,sikey:$("sikey").value});
   if(push)history[history.state?"pushState":"replaceState"](formState(),""); // Back returns to the previous search
-  showNeed();runId++;searched=o;results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;view.order=[];lastFetchAt=-1;lastList=[];
+  showNeed();runId++;searched=o;endLook();results=[];seen=new Set();state={};view.src.clear();view.limit=PAGE;view.order=[];lastFetchAt=-1;lastList=[];
   o.srcs.forEach(k=>state[k]={page:0,more:true,rounds:0});
   cardCache.clear();$("grid").replaceChildren();$("tools").hidden=false;
   if(!o.srcs.length){searched=null;$("status").replaceChildren();$("more").hidden=true;$("empty").hidden=false;$("empty").textContent="Pick at least one source.";return;}
@@ -866,7 +868,7 @@ new IntersectionObserver(es=>{if(es[0].isIntersecting)maybeMore()},{rootMargin:N
 $("deeper").onclick=()=>maybeMore(true);
 ["dpi","mode","sys"].forEach(id=>$(id).addEventListener("change",()=>{if(id==="sys")minChips();showNeed();cardCache.clear();if(searched)resetView();})); // the size line on each card depends on all three
 $("lic").addEventListener("change",()=>{if(searched)resetView();});
-$("sort").onchange=()=>{view.sort=$("sort").value;resetView();};
+$("sort").onchange=()=>{view.sort=$("sort").value;if(view.sort!=="look")endLook();resetView();};
 const press=(b,on)=>{b.classList.toggle("on",on);b.setAttribute("aria-pressed",on);};
 $("artonly").onclick=()=>{view.art=!view.art;press($("artonly"),view.art);resetView();};
 /* chip rows where exactly one chip is on */
@@ -939,8 +941,67 @@ function rerender(){
   $("empty").hidden=shown.length>0;
   if(!shown.length)$("empty").textContent=!searched?"Press Search to find printable images.":busy?"Searching…":canFetch?"Nothing printable in the first batches yet.":"Nothing printable here. Try a lower DPI, a smaller minimum size, broader keywords or another source.";
   if(searched)statusLine(o,base);
+  if(view.sort==="look")lookQueue(list);
   requestAnimationFrame(()=>maybeMore());
 }
+
+/* ---------- similar look: re-sort the loaded results by how they look next to one picture ----------
+   Each thumbnail is shrunk to 32×32 and described by colour (Lab) in a 4×4 grid (layout), its overall colour and spread,
+   colourfulness, contrast (edges) and shape. Works only on images whose server allows reading pixels (CORS); others go last. */
+const look={ref:null,feat:new Map(),busy:0,todo:[]};
+function loadPixels(url){
+  return new Promise(res=>{if(!url)return res(null);const i=new Image();i.crossOrigin="anonymous";i.referrerPolicy="no-referrer";
+    const t=setTimeout(()=>res(null),15000);
+    i.onload=()=>{clearTimeout(t);try{const c=document.createElement("canvas");c.width=c.height=32;const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(i,0,0,32,32);res(x.getImageData(0,0,32,32).data);}catch(e){res(null)}};
+    i.onerror=()=>{clearTimeout(t);res(null)};i.src=url;});
+}
+function lab(r,g,b){ // sRGB 0–255 → CIE Lab (D65)
+  const f=v=>(v/=255)<=.04045?v/12.92:((v+.055)/1.055)**2.4;r=f(r);g=f(g);b=f(b);
+  const g3=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;
+  const X=g3((r*.4124+g*.3576+b*.1805)/.95047),Y=g3(r*.2126+g*.7152+b*.0722),Z=g3((r*.0193+g*.1192+b*.9505)/1.08883);
+  return [116*Y-16,500*(X-Y),200*(Y-Z)];
+}
+function lookFeatures(px,it){
+  const L=new Float32Array(1024),A=new Float32Array(1024),B=new Float32Array(1024);
+  for(let i=0;i<1024;i++){const [l,a,b]=lab(px[i*4],px[i*4+1],px[i*4+2]);L[i]=l;A[i]=a;B[i]=b;}
+  const v=[],mean=arr=>arr.reduce((s,x)=>s+x,0)/arr.length,sd=(arr,m)=>Math.sqrt(arr.reduce((s,x)=>s+(x-m)**2,0)/arr.length);
+  for(let gy=0;gy<4;gy++)for(let gx=0;gx<4;gx++){let l=0,a=0,b=0;
+    for(let y=0;y<8;y++)for(let x=0;x<8;x++){const i=(gy*8+y)*32+gx*8+x;l+=L[i];a+=A[i];b+=B[i];}
+    v.push(l/64/100,a/64/100,b/64/100);} // layout
+  const mL=mean(L),mA=mean(A),mB=mean(B);let edge=0,chroma=0;
+  for(let y=0;y<32;y++)for(let x=0;x<32;x++){const i=y*32+x;chroma+=Math.hypot(A[i],B[i]);if(x<31)edge+=Math.abs(L[i]-L[i+1]);if(y<31)edge+=Math.abs(L[i]-L[i+32]);}
+  const W=2; // overall look counts double
+  v.push(W*mL/100,W*mA/100,W*mB/100,W*sd(L,mL)/50,W*sd(A,mA)/50,W*sd(B,mB)/50,W*chroma/1024/60,W*edge/1984/25,1.5*Math.log((it.w||1)/(it.h||1))/2);
+  return v;
+}
+const lookDist=it=>{if(it===look.ref||it.id===look.ref?.id)return -1;const a=look.feat.get(look.ref?.id),b=look.feat.get(it.id);
+  if(!a||!b)return b===null?1e9:1e8; // not compared yet, or couldn't be read
+  let d=0;for(let i=0;i<a.length;i++)d+=(a[i]-b[i])**2;return d;};
+async function lookOne(it){const px=await loadPixels(it.thumb)||(it.preview&&it.preview!==it.thumb?await loadPixels(it.preview):null);look.feat.set(it.id,px?lookFeatures(px,it):null);}
+/* compare every loaded result, six at a time, re-sorting as answers arrive */
+function lookQueue(list){
+  for(const it of list)if(!look.feat.has(it.id)&&!look.todo.includes(it)){look.todo.push(it);}
+  const next=async()=>{const it=look.todo.shift();if(!it||!look.ref){look.busy--;lookMsg();return;}
+    await lookOne(it);if(look.ref&&!view.order.length)scheduleRender();next();};
+  while(look.busy<6&&look.todo.length){look.busy++;next();}
+  lookMsg();
+}
+function lookMsg(){
+  if(!look.ref)return;const n=[...look.feat.values()],bad=n.filter(x=>x===null).length;
+  $("lookmsg").hidden=false;
+  $("lookmsg").textContent=`Sorted by look against “${look.ref.title}”${look.todo.length?` · comparing… ${look.todo.length} to go`:""}${bad?` · ${bad} couldn't be read (their museum blocks it) and are listed last`:""}. Compares colour, tone, contrast and layout, not subject.`;
+}
+async function lookLike(it){
+  const opt=$("sort").querySelector('[value="look"]');
+  if(!look.feat.get(it.id))await lookOne(it);
+  if(!look.feat.get(it.id)){alert("Can't read this picture's colours: its museum doesn't allow it. Try another image.");return;}
+  look.ref=it;look.todo=[];view.sort="look";opt.hidden=false;opt.textContent="Looks like: "+String(it.title).slice(0,40);$("sort").value="look";
+  if($("dlg").open)$("dlg").close();
+  if(!results.some(r=>r.id===it.id))results.unshift(it); // e.g. picked from an earlier search
+  resetView();toResults();
+}
+function endLook(){if(!look.ref&&view.sort!=="look")return;look.ref=null;look.todo=[];const opt=$("sort").querySelector('[value="look"]');opt.hidden=true;
+  if(view.sort==="look"){view.sort="best";$("sort").value="best";}$("lookmsg").hidden=true;}
 
 /* ---------- similar: re-search by title words / artist, same medium and era (metadata only — no image matching) ---------- */
 const STOP=new Set("the a an and or of with in on at to for from by after before near under over into its his her their this that study sketch untitled plate page fol folio leaf no nr vol part view portrait detail recto verso design de la le les du des et van het een der den die und von il del della di".split(" "));
@@ -998,6 +1059,7 @@ function openDetail(it){
   { // one chip per title word, the artist, and a broad "same medium & era" search
     const m=mediumOf(it),era=it.year?{from:it.year-30,to:it.year+30}:{},sn=surname(it.artist),box=$("simchips");
     const chip=(label,args)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=label;b.onclick=()=>searchFor(args);box.appendChild(b);};
+    {const b=document.createElement("button");b.type="button";b.className="chip on";b.textContent="◐ Similar look";b.title="Re-sort the loaded results by colour, tone, contrast and layout next to this picture";b.onclick=()=>lookLike(it);box.appendChild(b);}
     titleWords(it).slice(0,6).forEach(w=>chip(w,{q:w,medium:m,...era}));
     if(sn)chip("by "+sn,{q:sn});
     if(m||it.year)chip(`any ${m||"work"}${it.year?` ${era.from}–${era.to}`:""}`,{medium:m,...era});
