@@ -118,6 +118,8 @@ td:first-child{color:var(--muted);width:42%;padding-right:8px}
 .crop img{max-width:none;max-height:none;display:block}
 .note{font-size:12px;color:var(--muted)}
 #boardsbtn{position:fixed;right:16px;bottom:16px}
+#bnudge{position:fixed;right:16px;bottom:64px;display:flex;align-items:center;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 6px 6px 12px;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.2);max-width:calc(100vw - 32px)}
+#bnudge[hidden]{display:none}
 #bpop{position:fixed;z-index:1000;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;width:260px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.25);display:grid;gap:8px;font-size:14px}
 #bpop label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);font-weight:400;letter-spacing:0;cursor:pointer;min-height:28px}
 .new{display:flex;flex-wrap:wrap;gap:6px}.new input{flex:1;width:0;min-width:120px}
@@ -167,6 +169,7 @@ td:first-child{color:var(--muted);width:42%;padding-right:8px}
 <div class="more" id="more" hidden><span id="moretxt"></span><button class="btn ghost" type="button" id="deeper" hidden>Search deeper</button></div>
 </div>
 <button class="btn" id="boardsbtn" type="button">Boards</button>
+<div id="bnudge" role="status" hidden>Boards live only in this browser.<button class="btn" type="button" id="bnow">Back up now</button><button class="btn ghost" type="button" id="blater" aria-label="Remind me in a week">✕</button></div>
 <div id="bpop" role="dialog" aria-label="Save to board" hidden></div>
 
 <dialog id="dlg" aria-labelledby="dtitle"><button class="x" id="dclose" type="button" aria-label="Close">✕</button><div id="dbody"></div></dialog>
@@ -247,7 +250,15 @@ function loadBoards(){
 }
 let boards=loadBoards(),savedIds=new Set();
 const countSaved=()=>{savedIds=new Set(boards.flatMap(b=>b.items.map(x=>x.id)));};
-function saveBoards(){countSaved();if(!store.set("pf_boards",boards))alert("Couldn't save your boards: this browser's storage is full or blocked.");}
+function saveBoards(){countSaved();if(!store.set("pf_boards",boards))alert("Couldn't save your boards: this browser's storage is full or blocked.");checkBackup();}
+/* boards live in this browser only (Safari clears a site's storage after 7 days without a visit), so nudge for a backup once a week while anything is saved */
+const WEEK=7*864e5;
+function checkBackup(){
+  if(!savedIds.size){$("bnudge").hidden=true;return;}
+  const last=store.get("pf_backup",0);if(!last){store.set("pf_backup",Date.now());return;} // the week starts with the first save
+  $("bnudge").hidden=Date.now()-last<WEEK;
+}
+function backupBoards(){download("print-finder-boards.json",JSON.stringify({version:1,boards},null,1),"application/json");store.set("pf_backup",Date.now());$("bnudge").hidden=true;}
 countSaved();
 
 /* ---------- UI setup ---------- */
@@ -1364,7 +1375,7 @@ function showBoards(msg=""){
       download((b.name.replace(/[^\w-]+/g,"-").replace(/^-+|-+$/g,"")||"board")+".csv","﻿"+[head.join(","),...rows].join("\n"),"text/csv;charset=utf-8"); // BOM: Excel reads accents correctly
     };
   }
-  $("bexp").onclick=()=>download("print-finder-boards.json",JSON.stringify({version:1,boards},null,1),"application/json");
+  $("bexp").onclick=backupBoards;
   $("bimp").onclick=()=>$("bfile").click();
   $("bfile").onchange=async()=>{
     let inc;
@@ -1409,6 +1420,9 @@ button{font:inherit;font-weight:600;background:#2f5d50;color:#fff;border:0;borde
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 $("boardsbtn").onclick=()=>showBoards();
+$("bnow").onclick=backupBoards;
+$("blater").onclick=()=>{store.set("pf_backup",Date.now());$("bnudge").hidden=true;}; // ask again in a week
+checkBackup();
 
 /* ---------- self-test: one small live search per source, run from the viewer's browser ---------- */
 const imgOK=url=>new Promise(res=>{if(!url)return res(false);const i=new Image();i.referrerPolicy="no-referrer";
